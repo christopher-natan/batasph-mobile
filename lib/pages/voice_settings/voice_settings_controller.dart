@@ -1,0 +1,53 @@
+import 'package:get/get.dart';
+import 'package:batasph_mobile/data/local/my_shared_pref.dart';
+
+class VoiceSettingsController extends GetxController {
+  static const int maxSpeechLanguages = 3;
+
+  final selectedVoice = Rx<String>(MySharedPref.getSelectedVoice());
+  final speechLanguages = RxList<String>(MySharedPref.getSpeechLanguages());
+
+  static const voices = <Map<String, String>>[
+    {'id': 'luna', 'label': 'Luna', 'gender': 'female'},
+    {'id': 'aria', 'label': 'Aria', 'gender': 'female'},
+    {'id': 'atlas', 'label': 'Atlas', 'gender': 'male'},
+    {'id': 'orion', 'label': 'Orion', 'gender': 'male'},
+  ];
+
+  static const supportedLanguages = <Map<String, String>>[
+    {'code': 'en', 'label': 'English'},
+    {'code': 'tl', 'label': 'Tagalog / Filipino'},
+    {'code': 'ceb', 'label': 'Cebuano'},
+    {'code': 'hil', 'label': 'Hiligaynon'},
+    {'code': 'ilo', 'label': 'Ilocano'},
+    {'code': 'bcl', 'label': 'Bicolano'},
+    {'code': 'war', 'label': 'Waray'},
+  ];
+
+  Future<void> setSelectedVoice(String voiceId) async {
+    selectedVoice.value = voiceId;
+    await MySharedPref.setSelectedVoice(voiceId);
+  }
+
+  Future<void> toggleSpeechLanguage(String code) async {
+    if (code == 'en') {
+      return;
+    }
+
+    if (speechLanguages.contains(code)) {
+      speechLanguages.remove(code);
+    } else {
+      if (speechLanguages.length >= maxSpeechLanguages) {
+        Get.snackbar(
+          'Language limit reached',
+          'Choose up to $maxSpeechLanguages speech languages.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+      speechLanguages.add(code);
+    }
+
+    await MySharedPref.setSpeechLanguages(speechLanguages.toList());
+  }
+}

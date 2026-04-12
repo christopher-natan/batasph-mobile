@@ -1,0 +1,28 @@
+*.agdai
+MAlonzo/**
+
+# Claude Code MCP config (contains API keys)
+.mcp.json
+
+# Claude Code
+.claude/
+
+# Flutter
+.flutter-plugins-dependencies
+
+# Dart tools
+.dart_tool/
+
+# IDE
+.idea/
+
+# Android
+android/.kotlin/
+android/key.properties
+android/app/memori-release.jks
+
+# Build artifacts
+build/
+
+# Resources
+resources/
