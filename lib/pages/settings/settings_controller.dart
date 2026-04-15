@@ -9,9 +9,11 @@ import 'package:batasph_mobile/pages/chat/chat_controller.dart';
 import 'package:batasph_mobile/pages/home/home_controller.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/services/auth_service.dart';
+import 'package:batasph_mobile/services/saved_answers_service.dart';
 
 class SettingsController extends GetxController {
   final _authService = Get.find<AuthService>();
+  final _savedAnswersService = Get.find<SavedAnswersService>();
 
   final isDarkMode = (!MySharedPref.getThemeIsLight()).obs;
   final currentThemeId = MySharedPref.getAppTheme().obs;
@@ -36,6 +38,8 @@ class SettingsController extends GetxController {
   }
 
   String get accountInitials => currentUser.value?.initials ?? 'BT';
+
+  int get savedAnswersCount => _savedAnswersService.savedAnswers.length;
 
   void toggleDarkMode(bool value) {
     isDarkMode.value = value;
@@ -77,6 +81,10 @@ class SettingsController extends GetxController {
 
   void openVoiceSettings() {
     Get.toNamed(Routes.VOICE_SETTINGS);
+  }
+
+  void openSavedAnswers() {
+    Get.toNamed(Routes.SAVED_ANSWERS);
   }
 
   Future<void> logout() async {

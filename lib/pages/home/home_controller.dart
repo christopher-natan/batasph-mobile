@@ -39,6 +39,10 @@ class HomeController extends GetxController {
     Get.toNamed(Routes.VOICE_CHAT);
   }
 
+  void openSavedAnswers() {
+    Get.toNamed(Routes.SAVED_ANSWERS);
+  }
+
   Future<void> loadStarterQuestions() async {
     isLoadingStarterQuestions.value = true;
     starterQuestionsError.value = '';

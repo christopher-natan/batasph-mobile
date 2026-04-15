@@ -18,6 +18,7 @@ class MySharedPref {
   static const String _voiceSilenceSecondsKey = 'voice_silence_seconds';
   static const String _selectedVoiceKey = 'selected_voice';
   static const String _speechLanguagesKey = 'speech_languages';
+  static const String _savedAnswersKey = 'saved_answers';
 
   static Future<void> init() async {
     _sharedPreferences = await SharedPreferences.getInstance();
@@ -129,4 +130,13 @@ class MySharedPref {
         .toList();
     await _sharedPreferences.setStringList(_speechLanguagesKey, normalized);
   }
+
+  static List<String> getSavedAnswers() =>
+      _sharedPreferences.getStringList(_savedAnswersKey) ?? [];
+
+  static Future<void> setSavedAnswers(List<String> items) =>
+      _sharedPreferences.setStringList(_savedAnswersKey, items);
+
+  static Future<void> clearSavedAnswers() =>
+      _sharedPreferences.remove(_savedAnswersKey);
 }

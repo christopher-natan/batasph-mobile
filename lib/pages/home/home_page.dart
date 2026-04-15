@@ -32,7 +32,10 @@ class HomePage extends GetView<HomeController> {
                     padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 28.h),
                     sliver: SliverList.list(
                       children: [
-                        _HomeHeader(isDark: isDark),
+                        _HomeHeader(
+                          isDark: isDark,
+                          onOpenSavedAnswers: controller.openSavedAnswers,
+                        ),
                         SizedBox(height: 18.h),
                         _IntroBlock(isDark: isDark),
                         SizedBox(height: 22.h),
@@ -77,8 +80,9 @@ class HomePage extends GetView<HomeController> {
 
 class _HomeHeader extends StatelessWidget {
   final bool isDark;
+  final VoidCallback onOpenSavedAnswers;
 
-  const _HomeHeader({required this.isDark});
+  const _HomeHeader({required this.isDark, required this.onOpenSavedAnswers});
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +132,34 @@ class _HomeHeader extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        SizedBox(width: 12.w),
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onOpenSavedAnswers,
+            borderRadius: BorderRadius.circular(16.r),
+            child: Container(
+              width: 42.w,
+              height: 42.w,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1C2533)
+                    : const Color(0xFFFDF8EF),
+                borderRadius: BorderRadius.circular(16.r),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : const Color(0xFFE8DDCD),
+                ),
+              ),
+              child: Icon(
+                Icons.star_outline_rounded,
+                color: const Color(0xFFA77B43),
+                size: 20.sp,
+              ),
+            ),
           ),
         ),
       ],

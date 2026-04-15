@@ -116,16 +116,6 @@ class _ProminentVoiceHero extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(height: 20.h),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 10.w,
-                runSpacing: 10.h,
-                children: const [
-                  _FeaturePill(label: 'Hands-Free First'),
-                  _FeaturePill(label: 'Grounded Answers'),
-                ],
-              ),
             ],
           ),
         ),
@@ -306,31 +296,6 @@ class _HeroChip extends StatelessWidget {
           color: textColor,
           fontSize: 11.sp,
           fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _FeaturePill extends StatelessWidget {
-  final String label;
-
-  const _FeaturePill({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999.r),
-        color: Colors.white.withValues(alpha: 0.12),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12.sp,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );

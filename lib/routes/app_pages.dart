@@ -12,6 +12,8 @@ import 'package:batasph_mobile/pages/profile/profile_binding.dart';
 import 'package:batasph_mobile/pages/profile/profile_page.dart';
 import 'package:batasph_mobile/pages/register/register_binding.dart';
 import 'package:batasph_mobile/pages/register/register_page.dart';
+import 'package:batasph_mobile/pages/saved_answers/saved_answers_binding.dart';
+import 'package:batasph_mobile/pages/saved_answers/saved_answers_page.dart';
 import 'package:batasph_mobile/pages/splash/splash_binding.dart';
 import 'package:batasph_mobile/pages/splash/splash_page.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_binding.dart';
@@ -61,6 +63,11 @@ class AppPages {
       name: _Paths.PROFILE,
       page: () => const ProfilePage(),
       binding: ProfileBinding(),
+    ),
+    GetPage(
+      name: _Paths.SAVED_ANSWERS,
+      page: () => const SavedAnswersPage(),
+      binding: SavedAnswersBinding(),
     ),
     GetPage(
       name: _Paths.VOICE_CHAT,

@@ -10,6 +10,7 @@ abstract class Routes {
   static const MAIN_SHELL = _Paths.MAIN_SHELL;
   static const LEGAL_WEBVIEW = _Paths.LEGAL_WEBVIEW;
   static const PROFILE = _Paths.PROFILE;
+  static const SAVED_ANSWERS = _Paths.SAVED_ANSWERS;
   static const VOICE_CHAT = _Paths.VOICE_CHAT;
   static const VOICE_SETTINGS = _Paths.VOICE_SETTINGS;
 }
@@ -23,6 +24,7 @@ abstract class _Paths {
   static const MAIN_SHELL = '/main-shell';
   static const LEGAL_WEBVIEW = '/legal-webview';
   static const PROFILE = '/profile';
+  static const SAVED_ANSWERS = '/saved-answers';
   static const VOICE_CHAT = '/voice-chat';
   static const VOICE_SETTINGS = '/voice-settings';
 }

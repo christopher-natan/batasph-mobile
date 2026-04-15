@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:batasph_mobile/data/models/chat_message_model.dart';
-import 'package:batasph_mobile/data/models/chat_source_model.dart';
 
 class ChatBubbleComponent extends StatelessWidget {
   final ChatMessageModel message;
   final VoidCallback? onDelete;
-  final ValueChanged<ChatSourceModel>? onOpenSource;
+  final VoidCallback? onToggleSaved;
+  final bool isSaved;
 
   const ChatBubbleComponent({
     super.key,
     required this.message,
     this.onDelete,
-    this.onOpenSource,
+    this.onToggleSaved,
+    this.isSaved = false,
   });
 
   @override
@@ -24,7 +25,7 @@ class ChatBubbleComponent extends StatelessWidget {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: isUser ? 300.w : 340.w),
+        constraints: BoxConstraints(maxWidth: isUser ? 280.w : 340.w),
         margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
         padding: EdgeInsets.all(14.w),
         decoration: BoxDecoration(
@@ -39,41 +40,15 @@ class ChatBubbleComponent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                if (!isUser)
-                  Text(
-                    'Grounded in legal text',
-                    style: TextStyle(
-                      fontSize: 10.sp,
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                const Spacer(),
-                if (onDelete != null)
-                  PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'delete') {
-                        onDelete?.call();
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem<String>(
-                        value: 'delete',
-                        child: Text('Delete message pair'),
-                      ),
-                    ],
-                    icon: Icon(
-                      Icons.more_horiz_rounded,
-                      size: 18.sp,
-                      color: isUser
-                          ? Colors.white.withValues(alpha: 0.8)
-                          : theme.hintColor,
-                    ),
-                  ),
-              ],
-            ),
+            if (!isUser || onDelete != null)
+              _BubbleHeader(
+                isUser: isUser,
+                theme: theme,
+                onDelete: onDelete,
+                onToggleSaved: onToggleSaved,
+                isSaved: isSaved,
+                message: message,
+              ),
             if (!isUser) SizedBox(height: 6.h),
             if (isUser)
               SelectableText(
@@ -101,6 +76,18 @@ class ChatBubbleComponent extends StatelessWidget {
                   listBulletPadding: EdgeInsets.only(right: 4.w),
                 ),
               ),
+            if (!isUser && message.referenceLine != null) ...[
+              SizedBox(height: 10.h),
+              Text(
+                message.referenceLine!,
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  height: 1.45,
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             if (!isUser && message.disclaimer.trim().isNotEmpty) ...[
               SizedBox(height: 10.h),
               Text(
@@ -113,90 +100,109 @@ class ChatBubbleComponent extends StatelessWidget {
                 ),
               ),
             ],
-            if (!isUser && message.legalBasis.isNotEmpty) ...[
-              SizedBox(height: 12.h),
-              Text(
-                'Legal Basis',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              SizedBox(height: 8.h),
-              ...message.legalBasis.map(
-                (item) => Padding(
-                  padding: EdgeInsets.only(bottom: 6.h),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.only(top: 6.h, right: 8.w),
-                        child: Container(
-                          width: 5.w,
-                          height: 5.w,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          item,
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            height: 1.45,
-                            color: theme.hintColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            if (!isUser && message.hasSources) ...[
-              SizedBox(height: 10.h),
-              Text(
-                'Source Links',
-                style: TextStyle(
-                  fontSize: 11.sp,
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              SizedBox(height: 6.h),
-              ...message.sources
-                  .where((source) => source.sourceUrl.trim().isNotEmpty)
-                  .map(
-                    (source) => Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: onOpenSource == null
-                            ? null
-                            : () => onOpenSource!(source),
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          source.label,
-                          textAlign: TextAlign.left,
-                          style: TextStyle(
-                            fontSize: 12.sp,
-                            fontWeight: FontWeight.w600,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BubbleHeader extends StatelessWidget {
+  final bool isUser;
+  final ThemeData theme;
+  final VoidCallback? onDelete;
+  final VoidCallback? onToggleSaved;
+  final bool isSaved;
+  final ChatMessageModel message;
+
+  const _BubbleHeader({
+    required this.isUser,
+    required this.theme,
+    required this.onDelete,
+    required this.onToggleSaved,
+    required this.isSaved,
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isUser) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: _DeleteMenu(
+          iconColor: Colors.white.withValues(alpha: 0.8),
+          onDelete: onDelete,
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Text(
+          _label,
+          style: TextStyle(
+            fontSize: 10.sp,
+            fontWeight: FontWeight.w700,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const Spacer(),
+        if (onToggleSaved != null)
+          IconButton(
+            onPressed: onToggleSaved,
+            tooltip: isSaved ? 'Remove saved answer' : 'Save answer',
+            visualDensity: VisualDensity.compact,
+            splashRadius: 18.r,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(width: 28.w, height: 28.w),
+            icon: Icon(
+              isSaved ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 18.sp,
+              color: isSaved ? const Color(0xFFA77B43) : theme.hintColor,
+            ),
+          ),
+        _DeleteMenu(iconColor: theme.hintColor, onDelete: onDelete),
+      ],
+    );
+  }
+
+  String get _label {
+    switch (message.status) {
+      case 'general_guidance':
+        return 'General legal guidance';
+      case 'low_confidence':
+        return 'Low-confidence reply';
+      default:
+        return 'Grounded in legal text';
+    }
+  }
+}
+
+class _DeleteMenu extends StatelessWidget {
+  final Color iconColor;
+  final VoidCallback? onDelete;
+
+  const _DeleteMenu({required this.iconColor, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    if (onDelete == null) {
+      return const SizedBox.shrink();
+    }
+
+    return PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'delete') {
+          onDelete?.call();
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Text('Delete message pair'),
+        ),
+      ],
+      icon: Icon(Icons.more_horiz_rounded, size: 18.sp, color: iconColor),
     );
   }
 }

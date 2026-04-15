@@ -3,6 +3,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:batasph_mobile/config/language/answer_language.dart';
+import 'package:batasph_mobile/data/models/chat_message_model.dart';
 import 'package:batasph_mobile/pages/chat/chat_controller.dart';
 import 'package:batasph_mobile/pages/chat/components/chat_backdrop_component.dart';
 import 'package:batasph_mobile/pages/chat/components/chat_bubble_component.dart';
@@ -78,47 +79,38 @@ class _VoiceFirstLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final heroViewportHeight = constraints.maxHeight * 0.58;
+        final heroSectionHeight = heroViewportHeight.clamp(360.h, 520.h);
 
-    return CustomScrollView(
-      key: const ValueKey('voice-first-layout'),
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverPadding(
+        return SingleChildScrollView(
+          key: const ValueKey('voice-first-layout'),
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 28.h),
-          sliver: SliverList.list(
+          child: Column(
             children: [
-              _ChatHeader(subtitle: 'Voice-first legal asking'),
-              SizedBox(height: 18.h),
-              _IntroBlock(
-                eyebrow: 'VOICE-FIRST ASK PAGE',
-                title: 'Speak your question.',
-                description:
-                    'The primary action is voice. Use typing only when speaking is not ideal.',
-                isDark: isDark,
+              const _ChatHeader(subtitle: 'Voice-first legal asking'),
+              SizedBox(height: 12.h),
+              ConstrainedBox(
+                constraints: BoxConstraints(minHeight: heroSectionHeight),
+                child: Center(
+                  child: ChatVoiceHeroComponent(
+                    answerLanguageLabel: answerLanguageLabel,
+                    onOpenVoiceChat: controller.openVoiceChat,
+                  ),
+                ),
               ),
-              SizedBox(height: 22.h),
-              ChatVoiceHeroComponent(
-                answerLanguageLabel: answerLanguageLabel,
-                onOpenVoiceChat: controller.openVoiceChat,
-              ),
-              SizedBox(height: 22.h),
+              SizedBox(height: 16.h),
               ChatRecentPromptsComponent(
                 prompts: recentPrompts,
                 onTypeInstead: controller.openTextComposer,
                 onSelectPrompt: controller.useRecentPrompt,
               ),
-              SizedBox(height: 16.h),
-              _PageNote(
-                isDark: isDark,
-                text:
-                    'Ask prioritizes the fastest action: voice in the center, typing as fallback, and recent prompts for low-friction repeats.',
-              ),
             ],
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -137,94 +129,105 @@ class _ConversationLayout extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Column(
-      key: const ValueKey('conversation-layout'),
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 0),
-          child: _ChatHeader(
-            subtitle: 'Text chat',
-            onBack: controller.showVoiceFirstLanding,
-            onClearChat: controller.clearChat,
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 16.h),
-          child: ChatVoiceHeroComponent(
-            answerLanguageLabel: answerLanguageLabel,
-            onOpenVoiceChat: controller.openVoiceChat,
-            compact: true,
-          ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            color: const Color(0xFF22324D),
-            onRefresh: controller.reloadHistory,
-            child:
-                controller.messages.isEmpty &&
-                    !controller.isSending.value &&
-                    !controller.isStreaming.value &&
-                    controller.failedMessageText.value.isEmpty
-                ? ListView(
-                    controller: controller.scrollController,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(16.w, 24.h, 16.w, 12.h),
-                    children: const [_EmptyTextChatState()],
-                  )
-                : ListView(
-                    controller: controller.scrollController,
-                    padding: EdgeInsets.only(bottom: 12.h),
-                    children: [
-                      ...controller.messages.map(
-                        (message) => ChatBubbleComponent(
-                          message: message,
-                          onDelete: message.id.startsWith('temp_')
-                              ? null
-                              : () => controller.deleteMessagePair(message),
-                          onOpenSource: controller.openSource,
-                        ),
-                      ),
-                      if (controller.isStreaming.value)
-                        _StreamingBubble(text: controller.streamingText.value),
-                      if (controller.isSending.value &&
-                          !controller.isStreaming.value)
-                        _ThinkingBubble(theme: theme),
-                      if (controller.failedMessageText.value.isNotEmpty)
-                        _FailedBubble(
-                          failedText: controller.failedMessageText.value,
-                          onRetry: controller.retryFailedMessage,
-                        ),
-                    ],
-                  ),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
-          child: SafeArea(
-            top: false,
-            child: ChatComposeComponent(
-              textController: controller.textController,
-              focusNode: controller.focusNode,
-              hasText: controller.hasText.value,
-              isSending: controller.isSending.value,
-              isStreaming: controller.isStreaming.value,
-              onSubmit: controller.submitMessage,
-              onCancelStream: controller.cancelStream,
+    return Obx(() {
+      final messages = List<ChatMessageModel>.from(controller.messages);
+      final isSending = controller.isSending.value;
+      final isStreaming = controller.isStreaming.value;
+      final streamingText = controller.streamingText.value;
+      final failedMessageText = controller.failedMessageText.value;
+      final hasText = controller.hasText.value;
+      final savedAnswerIds = controller.savedAnswerIds.toSet();
+      final showEmptyState =
+          messages.isEmpty &&
+          !isSending &&
+          !isStreaming &&
+          failedMessageText.isEmpty;
+
+      return Column(
+        key: const ValueKey('conversation-layout'),
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 0),
+            child: _ChatHeader(
+              subtitle: 'Text chat',
+              onBack: controller.showVoiceFirstLanding,
+              onOpenSavedAnswers: controller.openSavedAnswers,
+              onClearChat: controller.clearChat,
             ),
           ),
-        ),
-        SizedBox(height: isDark ? 4.h : 0),
-      ],
-    );
+          Expanded(
+            child: RefreshIndicator(
+              color: const Color(0xFF22324D),
+              onRefresh: controller.reloadHistory,
+              child: showEmptyState
+                  ? ListView(
+                      controller: controller.scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: EdgeInsets.fromLTRB(16.w, 24.h, 16.w, 12.h),
+                      children: const [_EmptyTextChatState()],
+                    )
+                  : ListView(
+                      controller: controller.scrollController,
+                      padding: EdgeInsets.only(bottom: 12.h),
+                      children: [
+                        ...messages.map(
+                          (message) => ChatBubbleComponent(
+                            message: message,
+                            isSaved: savedAnswerIds.contains(message.id),
+                            onToggleSaved: message.isUser
+                                ? null
+                                : () => controller.toggleSavedAnswer(message),
+                            onDelete: message.id.startsWith('temp_')
+                                ? null
+                                : () => controller.deleteMessagePair(message),
+                          ),
+                        ),
+                        if (isStreaming) _StreamingBubble(text: streamingText),
+                        if (isSending && !isStreaming)
+                          _ThinkingBubble(theme: theme),
+                        if (failedMessageText.isNotEmpty)
+                          _FailedBubble(
+                            failedText: failedMessageText,
+                            onRetry: controller.retryFailedMessage,
+                          ),
+                      ],
+                    ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(16.w, 0, 16.w, 12.h),
+            child: SafeArea(
+              top: false,
+              child: ChatComposeComponent(
+                textController: controller.textController,
+                focusNode: controller.focusNode,
+                hasText: hasText,
+                isSending: isSending,
+                isStreaming: isStreaming,
+                onSubmit: controller.submitMessage,
+                onCancelStream: controller.cancelStream,
+              ),
+            ),
+          ),
+          SizedBox(height: isDark ? 4.h : 0),
+        ],
+      );
+    });
   }
 }
 
 class _ChatHeader extends StatelessWidget {
   final String subtitle;
   final VoidCallback? onBack;
+  final VoidCallback? onOpenSavedAnswers;
   final VoidCallback? onClearChat;
 
-  const _ChatHeader({required this.subtitle, this.onBack, this.onClearChat});
+  const _ChatHeader({
+    required this.subtitle,
+    this.onBack,
+    this.onOpenSavedAnswers,
+    this.onClearChat,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +291,13 @@ class _ChatHeader extends StatelessWidget {
             ],
           ),
         ),
+        if (onOpenSavedAnswers != null) ...[
+          IconButton(
+            onPressed: onOpenSavedAnswers,
+            icon: const Icon(Icons.star_outline_rounded),
+            tooltip: 'Saved answers',
+          ),
+        ],
         if (onClearChat != null)
           IconButton(
             onPressed: onClearChat,
@@ -295,99 +305,6 @@ class _ChatHeader extends StatelessWidget {
             tooltip: 'Clear chat',
           ),
       ],
-    );
-  }
-}
-
-class _IntroBlock extends StatelessWidget {
-  final String eyebrow;
-  final String title;
-  final String description;
-  final bool isDark;
-
-  const _IntroBlock({
-    required this.eyebrow,
-    required this.title,
-    required this.description,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 7.h),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.06)
-                : const Color(0xFFFFF8ED).withValues(alpha: 0.88),
-            borderRadius: BorderRadius.circular(999.r),
-          ),
-          child: Text(
-            eyebrow,
-            style: TextStyle(
-              color: const Color(0xFFA18867),
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.9,
-            ),
-          ),
-        ),
-        SizedBox(height: 16.h),
-        Text(
-          title,
-          style: TextStyle(
-            color: isDark ? Colors.white : const Color(0xFF1C2533),
-            fontSize: 30.sp,
-            fontWeight: FontWeight.w700,
-            height: 1.05,
-          ),
-        ),
-        SizedBox(height: 10.h),
-        Text(
-          description,
-          style: TextStyle(
-            color: isDark ? const Color(0xFFB0BAC9) : const Color(0xFF6E746F),
-            fontSize: 14.sp,
-            height: 1.6,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PageNote extends StatelessWidget {
-  final bool isDark;
-  final String text;
-
-  const _PageNote({required this.isDark, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(18.w),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.04)
-            : Colors.white.withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(24.r),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
-              : const Color(0xFFECE1D2),
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: isDark ? const Color(0xFFB0BAC9) : const Color(0xFF59606B),
-          fontSize: 13.sp,
-          height: 1.6,
-        ),
-      ),
     );
   }
 }

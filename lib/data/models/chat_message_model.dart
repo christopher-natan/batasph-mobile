@@ -41,6 +41,37 @@ class ChatMessageModel {
 
   bool get hasLegalBasis => legalBasis.isNotEmpty;
 
+  String? get primaryReference {
+    for (final item in legalBasis) {
+      final trimmed = item.trim();
+      if (trimmed.isNotEmpty) {
+        return _normalizeReference(trimmed);
+      }
+    }
+
+    for (final source in sources) {
+      final trimmed = source.label.trim();
+      if (trimmed.isNotEmpty) {
+        return _normalizeReference(trimmed);
+      }
+    }
+
+    return null;
+  }
+
+  String? get referenceLine {
+    if (status != 'ok') {
+      return null;
+    }
+
+    final legalBasisLine = _buildLegalBasisLine();
+    if (legalBasisLine == null || legalBasisLine.isEmpty) {
+      return null;
+    }
+
+    return 'Legal Basis: $legalBasisLine';
+  }
+
   ChatMessageModel copyWith({
     String? id,
     String? text,
@@ -137,4 +168,50 @@ class ChatMessageModel {
     'fallbackUsed': fallbackUsed,
     'disclaimer': disclaimer,
   };
+
+  String _normalizeReference(String value) {
+    return value
+        .replaceAllMapped(
+          RegExp(r'\bRA_(\d+)\b'),
+          (match) => 'RA ${match.group(1)}',
+        )
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  String? _buildLegalBasisLine() {
+    for (final source in sources) {
+      final fromSource = _buildSourceReference(source);
+      if (fromSource != null && fromSource.isNotEmpty) {
+        return fromSource;
+      }
+    }
+
+    return primaryReference;
+  }
+
+  String? _buildSourceReference(ChatSourceModel source) {
+    final normalizedLawId = _normalizeReference(source.lawId.trim());
+    final normalizedTitle = source.title.trim();
+
+    if (normalizedLawId.startsWith('RA ') && normalizedTitle.isNotEmpty) {
+      return '$normalizedLawId - $normalizedTitle';
+    }
+
+    if (normalizedTitle.isNotEmpty) {
+      return normalizedTitle;
+    }
+
+    if (normalizedLawId.isNotEmpty) {
+      return normalizedLawId;
+    }
+
+    final citation = source.citation.trim();
+    if (citation.isNotEmpty) {
+      return _normalizeReference(citation);
+    }
+
+    return null;
+  }
 }

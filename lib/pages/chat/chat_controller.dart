@@ -11,10 +11,12 @@ import 'package:batasph_mobile/data/models/chat_source_model.dart';
 import 'package:batasph_mobile/data/models/chat_stream_event.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/services/chat_service.dart';
+import 'package:batasph_mobile/services/saved_answers_service.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class ChatController extends GetxController {
   final _chatService = Get.find<ChatService>();
+  final _savedAnswersService = Get.find<SavedAnswersService>();
 
   final messages = <ChatMessageModel>[].obs;
   final isLoading = true.obs;
@@ -30,6 +32,10 @@ class ChatController extends GetxController {
   final textController = TextEditingController();
   final scrollController = ScrollController();
   final focusNode = FocusNode();
+
+  List<String> get savedAnswerIds => _savedAnswersService.savedAnswers
+      .map((item) => item.id)
+      .toList(growable: false);
 
   @override
   void onInit() {
@@ -209,6 +215,11 @@ class ChatController extends GetxController {
     Get.toNamed(Routes.VOICE_CHAT);
   }
 
+  void openSavedAnswers() {
+    focusNode.unfocus();
+    Get.toNamed(Routes.SAVED_ANSWERS);
+  }
+
   Future<void> useRecentPrompt(String prompt) async {
     isTextChatMode.value = true;
     await sendMessage(prompt);
@@ -277,6 +288,39 @@ class ChatController extends GetxController {
       Routes.LEGAL_WEBVIEW,
       arguments: {'title': source.label, 'url': source.sourceUrl},
     );
+  }
+
+  bool isSavedAnswer(String answerMessageId) {
+    return _savedAnswersService.isSaved(answerMessageId);
+  }
+
+  Future<void> toggleSavedAnswer(ChatMessageModel answerMessage) async {
+    final questionMessage = _findPairedQuestion(answerMessage);
+    if (answerMessage.isUser || questionMessage == null) {
+      return;
+    }
+
+    try {
+      final isSaved = await _savedAnswersService.toggleSavedAnswer(
+        questionMessage: questionMessage,
+        answerMessage: answerMessage,
+      );
+
+      Get.snackbar(
+        isSaved ? 'Saved answer' : 'Removed saved answer',
+        isSaved
+            ? 'This question and answer pair is now saved on this device.'
+            : 'This question and answer pair was removed from saved answers.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error) {
+      BatasphLogger.error('Failed to toggle saved answer: $error');
+      Get.snackbar(
+        'Unable to update saved answers',
+        'Try again in a moment.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   static int replaceMessageById(
@@ -363,5 +407,19 @@ class ChatController extends GetxController {
       duration: const Duration(milliseconds: 240),
       curve: Curves.easeOut,
     );
+  }
+
+  ChatMessageModel? _findPairedQuestion(ChatMessageModel answerMessage) {
+    final index = messages.indexWhere((item) => item.id == answerMessage.id);
+    if (index <= 0) {
+      return null;
+    }
+
+    final previousMessage = messages[index - 1];
+    if (!previousMessage.isUser) {
+      return null;
+    }
+
+    return previousMessage;
   }
 }

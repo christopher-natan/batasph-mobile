@@ -6,7 +6,6 @@ import 'package:batasph_mobile/pages/home/home_page.dart';
 import 'package:batasph_mobile/pages/main_shell/components/main_bottom_nav_component.dart';
 import 'package:batasph_mobile/pages/main_shell/main_shell_controller.dart';
 import 'package:batasph_mobile/pages/settings/settings_page.dart';
-import 'package:batasph_mobile/pages/sources/sources_page.dart';
 
 class MainShellPage extends GetView<MainShellController> {
   const MainShellPage({super.key});
@@ -15,12 +14,14 @@ class MainShellPage extends GetView<MainShellController> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final chatController = Get.find<ChatController>();
 
     return Obx(() {
       final currentIndex = controller.currentTabIndex.value;
+      final loadedTabIndexes = Set<int>.from(controller.loadedTabIndexes);
       final shouldHideBottomNav =
-          currentIndex == 1 && chatController.isTextChatMode.value;
+          currentIndex == 1 &&
+          loadedTabIndexes.contains(1) &&
+          Get.find<ChatController>().isTextChatMode.value;
 
       return Scaffold(
         backgroundColor: _backgroundColorForTab(
@@ -30,11 +31,16 @@ class MainShellPage extends GetView<MainShellController> {
         ),
         body: IndexedStack(
           index: currentIndex,
-          children: const [
-            HomePage(),
-            ChatPage(),
-            SourcesPage(),
-            SettingsPage(),
+          children: [
+            loadedTabIndexes.contains(0)
+                ? const HomePage()
+                : const SizedBox.shrink(),
+            loadedTabIndexes.contains(1)
+                ? const ChatPage()
+                : const SizedBox.shrink(),
+            loadedTabIndexes.contains(2)
+                ? const SettingsPage()
+                : const SizedBox.shrink(),
           ],
         ),
         bottomNavigationBar: shouldHideBottomNav
