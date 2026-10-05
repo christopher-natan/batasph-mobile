@@ -13,7 +13,6 @@ abstract class Routes {
   static const SETTINGS = _Paths.SETTINGS;
   static const PROFILE = _Paths.PROFILE;
   static const VOICE_CHAT = _Paths.VOICE_CHAT;
-  static const VOICE_SETTINGS = _Paths.VOICE_SETTINGS;
 }
 
 abstract class _Paths {
@@ -28,5 +27,4 @@ abstract class _Paths {
   static const SETTINGS = '/settings';
   static const PROFILE = '/profile';
   static const VOICE_CHAT = '/voice-chat';
-  static const VOICE_SETTINGS = '/voice-settings';
 }

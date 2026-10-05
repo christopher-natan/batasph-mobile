@@ -20,8 +20,6 @@ import 'package:batasph_mobile/pages/verify_email/verify_email_binding.dart';
 import 'package:batasph_mobile/pages/verify_email/verify_email_page.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_binding.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_page.dart';
-import 'package:batasph_mobile/pages/voice_settings/voice_settings_binding.dart';
-import 'package:batasph_mobile/pages/voice_settings/voice_settings_page.dart';
 
 part 'app_routes.dart';
 
@@ -80,11 +78,6 @@ class AppPages {
       name: _Paths.VOICE_CHAT,
       page: () => const VoiceChatPage(),
       binding: VoiceChatBinding(),
-    ),
-    GetPage(
-      name: _Paths.VOICE_SETTINGS,
-      page: () => const VoiceSettingsPage(),
-      binding: VoiceSettingsBinding(),
     ),
   ];
 }

@@ -12,11 +12,9 @@ import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/pages/home/home_controller.dart';
 import 'package:batasph_mobile/pages/home/home_page.dart';
 import 'package:batasph_mobile/pages/splash/splash_page.dart';
-import 'package:batasph_mobile/pages/voice_chat/services/cloud_tts_service.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/voice_call_audio_service.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_controller.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_page.dart';
-import 'package:batasph_mobile/services/chat_service.dart';
 
 const _previewKey = ValueKey('design-preview');
 
@@ -114,8 +112,6 @@ void main() {
   }
 
   PreviewCallController registerCall() {
-    Get.put(ChatService());
-    Get.put(CloudTtsService());
     Get.put(VoiceCallAudioService());
     final controller = PreviewCallController();
     Get.put<VoiceChatController>(controller);

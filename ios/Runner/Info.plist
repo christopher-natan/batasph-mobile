@@ -50,7 +50,7 @@
 		<key>NSCameraUsageDescription</key>
 		<string>BatasPH needs camera access if capture tools are enabled later.</string>
 		<key>NSMicrophoneUsageDescription</key>
-		<string>BatasPH needs microphone access if voice features are enabled later.</string>
+		<string>BatasPH uses the microphone so you can talk with Atty. Luna on a call.</string>
 		<key>NSSpeechRecognitionUsageDescription</key>
 		<string>BatasPH uses speech recognition so you can ask law questions by voice.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

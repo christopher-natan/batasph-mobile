@@ -22,17 +22,6 @@ class SettingsPage extends GetView<SettingsController> {
           children: [
             _AccountPanel(controller: controller),
             SizedBox(height: 24.h),
-            const _SectionLabel(title: 'Call'),
-            SizedBox(height: 10.h),
-            _Card(
-              child: _ActionTile(
-                icon: Icons.record_voice_over_outlined,
-                title: 'Voice Settings',
-                subtitle: 'Choose the languages you speak during a call.',
-                onTap: controller.openVoiceSettings,
-              ),
-            ),
-            SizedBox(height: 24.h),
             const _SectionLabel(title: 'Support'),
             SizedBox(height: 10.h),
             _Card(

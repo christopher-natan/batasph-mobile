@@ -44,10 +44,6 @@ class SettingsController extends GetxController {
     Get.toNamed(Routes.PROFILE);
   }
 
-  void openVoiceSettings() {
-    Get.toNamed(Routes.VOICE_SETTINGS);
-  }
-
   Future<void> logout() async {
     await _authService.logout();
     Get.snackbar(

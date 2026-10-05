@@ -17,14 +17,7 @@ class AppConfig {
   /// match the name, since answers introduce themselves with it.
   static const personaName = 'Atty. Luna';
   static const personaTagline = 'BatasPH AI Legal Guide';
-  static const personaVoice = 'luna';
   static const personaAvatarAsset = 'assets/images/avatars/luna_face.jpg';
-
-  // ─── Voice call tuning ────────────────────────────────────
-  /// Silence that ends the caller's turn, in seconds. 2 is Memori's
-  /// device-proven value (the STT services turn it into a 1.8s window);
-  /// 1 cut callers off at every thinking pause.
-  static const voiceSilenceSeconds = 2;
 
   // Google Sign-In
   // Web/server OAuth client ID, passed to google_sign_in as `serverClientId`.

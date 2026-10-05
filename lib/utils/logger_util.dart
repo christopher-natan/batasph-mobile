@@ -227,10 +227,39 @@ class BatasphLogger {
       if (data is String) {
         data = jsonDecode(data);
       }
-      return const JsonEncoder.withIndent('  ').convert(data);
+      return const JsonEncoder.withIndent('  ').convert(redactSecrets(data));
     } catch (_) {
       return data.toString();
     }
+  }
+
+  /// Body fields that must never reach a log file: logs are shared from
+  /// Settings → Share Logs.
+  static const _secretKeys = {
+    'password',
+    'newpassword',
+    'currentpassword',
+    'token',
+    'accesstoken',
+    'refreshtoken',
+    'idtoken',
+    'clientsecret',
+    'code',
+  };
+
+  /// [data] with every secret field (at any depth) replaced by `***`.
+  @visibleForTesting
+  static dynamic redactSecrets(dynamic data) {
+    if (data is Map) {
+      return {
+        for (final entry in data.entries)
+          entry.key: _secretKeys.contains('${entry.key}'.toLowerCase())
+              ? '***'
+              : redactSecrets(entry.value),
+      };
+    }
+    if (data is List) return [for (final item in data) redactSecrets(item)];
+    return data;
   }
 }
 

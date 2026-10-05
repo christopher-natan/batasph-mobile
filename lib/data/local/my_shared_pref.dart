@@ -10,7 +10,6 @@ class MySharedPref {
   static const String _authTokenKey = 'auth_token';
   static const String _authUserKey = 'auth_user';
   static const String _guestSessionIdKey = 'guest_session_id';
-  static const String _speechLanguagesKey = 'speech_languages';
   static const String _callerNameKey = 'caller_name';
 
   static Future<void> init() async {
@@ -51,19 +50,6 @@ class MySharedPref {
       _sharedPreferences.setString(_guestSessionIdKey, sessionId);
     }
     return sessionId;
-  }
-
-  static List<String> getSpeechLanguages() =>
-      _sharedPreferences.getStringList(_speechLanguagesKey) ??
-      const ['en', 'tl'];
-
-  static Future<void> setSpeechLanguages(List<String> languages) async {
-    final normalized = languages
-        .map((language) => language.trim())
-        .where((language) => language.isNotEmpty)
-        .toSet()
-        .toList();
-    await _sharedPreferences.setStringList(_speechLanguagesKey, normalized);
   }
 
   /// The caller's first name as they told Atty. Luna; null until they do.
