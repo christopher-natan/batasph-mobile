@@ -1,8 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:batasph_mobile/pages/forgot_password/forgot_password_arguments.dart';
+import 'package:batasph_mobile/pages/verify_email/verify_email_arguments.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/services/auth_service.dart';
+import 'package:batasph_mobile/utils/api_error_util.dart';
+import 'package:batasph_mobile/utils/google_sign_in_error_util.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class LoginController extends GetxController {
@@ -11,7 +16,10 @@ class LoginController extends GetxController {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final isLoading = false.obs;
+  final isGoogleLoading = false.obs;
   final obscurePassword = true.obs;
+
+  bool get isBusy => isLoading.value || isGoogleLoading.value;
 
   @override
   void onClose() {
@@ -48,19 +56,86 @@ class LoginController extends GetxController {
       );
       Get.offAllNamed(Routes.MAIN_SHELL);
     } on DioException catch (error) {
+      if (ApiErrorUtil.isEmailNotVerified(error)) {
+        // Right password, unverified inbox: finish verification instead.
+        BatasphLogger.log(
+          '[Auth] Login needs email verification | email=$email',
+        );
+        Get.toNamed(
+          Routes.VERIFY_EMAIL,
+          arguments: VerifyEmailArguments(email: email, sendCodeOnOpen: true),
+        );
+        return;
+      }
       final message = _extractError(error);
-      BatasphLogger.error('Login failed: $message');
+      BatasphLogger.error('[Auth] Login failed: $message', error: error);
       _showError(message);
-    } catch (error) {
-      BatasphLogger.error('Login failed: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Auth] Login failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _showError('Unable to sign in right now.');
     } finally {
       isLoading.value = false;
     }
   }
 
+  Future<void> signInWithGoogle() async {
+    if (isBusy) {
+      return;
+    }
+
+    isGoogleLoading.value = true;
+    try {
+      await _authService.signInWithGoogle();
+      Get.snackbar(
+        'Signed in',
+        'Your BatasPH account is now active on this device.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      Get.offAllNamed(Routes.MAIN_SHELL);
+    } on GoogleSignInException catch (error) {
+      // A user backing out of the account picker is not an error worth showing.
+      if (!GoogleSignInErrorUtil.isCanceled(error)) {
+        _showError('Google sign-in failed. Please try again.');
+      }
+    } on DioException catch (error) {
+      final message = _extractError(error);
+      BatasphLogger.error(
+        '[Auth] Google sign-in failed: $message',
+        error: error,
+      );
+      _showError(message);
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Auth] Google sign-in failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _showError('Unable to sign in with Google right now.');
+    } finally {
+      isGoogleLoading.value = false;
+    }
+  }
+
   void goToRegister() {
     Get.toNamed(Routes.REGISTER);
+  }
+
+  Future<void> goToForgotPassword() async {
+    final result = await Get.toNamed(
+      Routes.FORGOT_PASSWORD,
+      arguments: ForgotPasswordArguments(
+        initialEmail: emailController.text.trim(),
+      ),
+    );
+    // A completed reset hands back the email so the user can sign straight in.
+    if (result is String) {
+      emailController.text = result;
+      passwordController.clear();
+    }
   }
 
   void _showError(String message) {
@@ -72,15 +147,9 @@ class LoginController extends GetxController {
   }
 
   String _extractError(DioException error) {
-    if (error.response?.statusCode == 404) {
-      return 'BatasPH API auth endpoints are not available yet.';
-    }
-
-    final data = error.response?.data;
-    if (data is Map<String, dynamic> && data['message'] is String) {
-      return data['message'] as String;
-    }
-
-    return 'Unable to sign in right now.';
+    return ApiErrorUtil.message(
+      error,
+      fallback: 'Unable to sign in right now.',
+    );
   }
 }

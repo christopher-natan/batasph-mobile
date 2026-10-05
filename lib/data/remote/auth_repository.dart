@@ -26,6 +26,47 @@ class AuthRepository {
 
     return AuthResponse.fromJson(response.data as Map<String, dynamic>);
   }
+
+  /// Proves the inbox with the emailed code; the API signs the user in.
+  Future<AuthResponse> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _client.post(
+      '/auth/verify',
+      data: {'email': email, 'code': code},
+    );
+
+    return AuthResponse.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> resendVerificationCode(String email) async {
+    await _client.post('/auth/resend-code', data: {'email': email});
+  }
+
+  Future<void> requestPasswordReset(String email) async {
+    await _client.post('/auth/forgot-password', data: {'email': email});
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String password,
+  }) async {
+    await _client.post(
+      '/auth/reset-password',
+      data: {'email': email, 'code': code, 'password': password},
+    );
+  }
+
+  Future<AuthResponse> googleAuth(String idToken) async {
+    final response = await _client.post(
+      '/auth/google',
+      data: {'idToken': idToken},
+    );
+
+    return AuthResponse.fromJson(response.data as Map<String, dynamic>);
+  }
 }
 
 class AuthResponse {

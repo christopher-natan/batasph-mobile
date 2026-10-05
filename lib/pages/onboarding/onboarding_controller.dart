@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
+import 'package:batasph_mobile/utils/logger_util.dart';
 
 class OnboardingController extends GetxController {
   final pageController = PageController();
@@ -23,6 +24,7 @@ class OnboardingController extends GetxController {
   }
 
   void skip() {
+    BatasphLogger.log('[Onboarding] Skipped at page ${currentPage.value}');
     completeOnboarding();
   }
 
@@ -31,6 +33,7 @@ class OnboardingController extends GetxController {
   }
 
   void completeOnboarding() {
+    BatasphLogger.log('[Onboarding] Complete');
     MySharedPref.setOnboardingComplete();
     Get.offAllNamed(Routes.MAIN_SHELL);
   }

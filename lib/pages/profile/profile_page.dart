@@ -167,7 +167,8 @@ class ProfilePage extends GetView<ProfileController> {
               () => SizedBox(
                 height: 52.h,
                 child: OutlinedButton.icon(
-                  onPressed: controller.isLoading.value
+                  onPressed:
+                      controller.isLoading.value || controller.isDeleting.value
                       ? null
                       : controller.logout,
                   icon: const Icon(Icons.logout_outlined),
@@ -175,10 +176,62 @@ class ProfilePage extends GetView<ProfileController> {
                 ),
               ),
             ),
+            SizedBox(height: 24.h),
+            Obx(
+              () => TextButton.icon(
+                onPressed:
+                    controller.isLoading.value || controller.isDeleting.value
+                    ? null
+                    : () => _confirmDeleteAccount(),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                icon: controller.isDeleting.value
+                    ? SizedBox(
+                        width: 18.w,
+                        height: 18.w,
+                        child: const CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_forever_outlined),
+                label: const Text('Delete account'),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+          'This permanently deletes your BatasPH account, your chat history '
+          'and your answer reports. It cannot be undone. Answers saved on '
+          'this device stay until you clear them.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Get.theme.colorScheme.error,
+              foregroundColor: Get.theme.colorScheme.onError,
+            ),
+            onPressed: () => Get.back(result: true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+      barrierDismissible: true,
+    );
+
+    if (confirmed == true) {
+      await controller.deleteAccount();
+    }
   }
 }
 

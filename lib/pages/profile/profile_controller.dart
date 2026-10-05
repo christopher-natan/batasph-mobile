@@ -3,12 +3,14 @@ import 'package:get/get.dart';
 import 'package:batasph_mobile/data/models/user_model.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/services/auth_service.dart';
+import 'package:batasph_mobile/utils/api_error_util.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class ProfileController extends GetxController {
   final _authService = Get.find<AuthService>();
 
   final isLoading = false.obs;
+  final isDeleting = false.obs;
   final syncMessage = RxnString();
 
   Rxn<UserModel> get currentUser => _authService.currentUser;
@@ -57,7 +59,10 @@ class ProfileController extends GetxController {
       await _authService.refreshProfile();
     } on DioException catch (error) {
       final message = _extractError(error);
-      BatasphLogger.error('Profile refresh failed: $message');
+      BatasphLogger.error(
+        '[Auth] Profile refresh failed: $message',
+        error: error,
+      );
       syncMessage.value = message;
       if (showErrorSnackbar) {
         Get.snackbar(
@@ -66,8 +71,12 @@ class ProfileController extends GetxController {
           snackPosition: SnackPosition.BOTTOM,
         );
       }
-    } catch (error) {
-      BatasphLogger.error('Profile refresh failed: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Auth] Profile refresh failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       syncMessage.value = 'Unable to refresh your BatasPH profile.';
       if (showErrorSnackbar) {
         Get.snackbar(
@@ -89,6 +98,48 @@ class ProfileController extends GetxController {
       'Your BatasPH account session has been cleared.',
       snackPosition: SnackPosition.BOTTOM,
     );
+  }
+
+  Future<void> deleteAccount() async {
+    isDeleting.value = true;
+    try {
+      await _authService.deleteAccount();
+      // No reset of isDeleting on success: this controller is disposed with
+      // the route below.
+      Get.offAllNamed(Routes.MAIN_SHELL);
+      Get.snackbar(
+        'Account deleted',
+        'Your BatasPH account and its data have been permanently deleted.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } on DioException catch (error) {
+      isDeleting.value = false;
+      final message = ApiErrorUtil.message(
+        error,
+        fallback: 'Unable to delete your account right now.',
+      );
+      BatasphLogger.error(
+        '[Auth] Delete account failed: $message',
+        error: error,
+      );
+      Get.snackbar(
+        'Account not deleted',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (error, stackTrace) {
+      isDeleting.value = false;
+      BatasphLogger.error(
+        '[Auth] Delete account failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      Get.snackbar(
+        'Account not deleted',
+        'Unable to delete your account right now.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
   }
 
   String _extractError(DioException error) {

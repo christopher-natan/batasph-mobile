@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1024, initial-scale=1" />
+    <title>BatasPH Google Play feature graphic</title>
+    <style>
+      @font-face {
+        font-family: Poppins;
+        src: url("../../assets/fonts/Poppins-Regular.ttf");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: Poppins;
+        src: url("../../assets/fonts/Poppins-SemiBold.ttf");
+        font-weight: 600 800;
+      }
+      * { box-sizing: border-box; }
+      html, body { width: 1024px; height: 500px; margin: 0; overflow: hidden; }
+      body { font-family: Poppins, sans-serif; }
+      .canvas {
+        position: relative;
+        width: 1024px;
+        height: 500px;
+        overflow: hidden;
+        color: #fff9ed;
+        background:
+          radial-gradient(circle at 83% 32%, rgba(205, 157, 91, .29), transparent 36%),
+          radial-gradient(circle at 7% 103%, rgba(68, 102, 139, .26), transparent 46%),
+          linear-gradient(130deg, #142033, #273853 62%, #19263b);
+      }
+      .canvas::before {
+        content: "";
+        position: absolute;
+        width: 700px;
+        height: 700px;
+        top: -308px;
+        right: -278px;
+        border: 1px solid rgba(227, 186, 126, .28);
+        border-radius: 50%;
+        box-shadow: 0 0 0 77px rgba(227, 186, 126, .045), 0 0 0 162px rgba(227, 186, 126, .03);
+      }
+      .canvas::after {
+        content: "";
+        position: absolute;
+        left: -246px;
+        bottom: -452px;
+        width: 730px;
+        height: 730px;
+        border: 1px solid rgba(227, 186, 126, .12);
+        border-radius: 50%;
+      }
+      .brand {
+        position: absolute;
+        left: 130px;
+        top: 76px;
+        color: #eac28a;
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: 6px;
+      }
+      .brand::after {
+        content: "";
+        display: block;
+        width: 70px;
+        height: 3px;
+        margin-top: 15px;
+        border-radius: 3px;
+        background: #e0af71;
+      }
+      h1 {
+        position: absolute;
+        left: 126px;
+        top: 168px;
+        width: 620px;
+        margin: 0;
+        font-size: 59px;
+        line-height: 1.13;
+        letter-spacing: -2px;
+        font-weight: 700;
+        text-shadow: 0 8px 28px rgba(0, 0, 0, .13);
+      }
+      h1 span { color: #e6bd82; }
+      .subtitle {
+        position: absolute;
+        left: 130px;
+        top: 354px;
+        margin: 0;
+        color: #dbe2ea;
+        font-size: 24px;
+        font-weight: 400;
+      }
+      .ui-panel {
+        position: absolute;
+        top: -42px;
+        right: 60px;
+        width: 272px;
+        height: 572px;
+        padding: 10px;
+        overflow: hidden;
+        border: 1px solid rgba(245, 210, 157, .66);
+        border-radius: 34px;
+        background: #101823;
+        box-shadow: 0 26px 68px rgba(3, 8, 18, .56);
+        transform: rotate(7deg);
+      }
+      .ui-panel img {
+        display: block;
+        width: 250px;
+        height: 500px;
+        border-radius: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="canvas">
+      <div class="brand">BATASPH</div>
+      <h1>Philippine law,<br /><span>plainly explained.</span></h1>
+      <p class="subtitle">Ask by voice or text.</p>
+      <div class="ui-panel"><img src="source/voice-landing.png" alt="" /></div>
+    </main>
+  </body>
+</html>

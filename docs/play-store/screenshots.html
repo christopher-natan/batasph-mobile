@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1080, initial-scale=1" />
+    <title>BatasPH Play Store screenshots</title>
+    <style>
+      @font-face {
+        font-family: Poppins;
+        src: url("../../assets/fonts/Poppins-Regular.ttf");
+        font-weight: 400;
+      }
+      @font-face {
+        font-family: Poppins;
+        src: url("../../assets/fonts/Poppins-Medium.ttf");
+        font-weight: 500;
+      }
+      @font-face {
+        font-family: Poppins;
+        src: url("../../assets/fonts/Poppins-SemiBold.ttf");
+        font-weight: 600 800;
+      }
+      * { box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; margin: 0; overflow: hidden; }
+      body { font-family: Poppins, sans-serif; color: #fff9ed; }
+      .canvas {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 95% 9%, rgba(191, 138, 73, .25), transparent 33%),
+          radial-gradient(circle at -18% 72%, rgba(81, 115, 144, .32), transparent 45%),
+          linear-gradient(145deg, #101a2a 0%, #1e2d45 55%, #111b2a 100%);
+      }
+      .canvas::before {
+        content: "";
+        position: absolute;
+        top: -420px;
+        right: -370px;
+        width: 930px;
+        height: 930px;
+        border: 2px solid rgba(230, 191, 132, .14);
+        border-radius: 50%;
+        box-shadow: 0 0 0 82px rgba(230, 191, 132, .035), 0 0 0 176px rgba(230, 191, 132, .025);
+      }
+      .canvas::after {
+        content: "";
+        position: absolute;
+        left: -410px;
+        bottom: -340px;
+        width: 960px;
+        height: 960px;
+        border: 2px solid rgba(230, 191, 132, .10);
+        border-radius: 50%;
+      }
+      .brand {
+        position: absolute;
+        top: 61px;
+        left: 76px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        z-index: 2;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        background: linear-gradient(145deg, #3a4d66, #182539);
+        border: 1px solid rgba(240, 207, 156, .35);
+      }
+      .brand-mark img { width: 54px; height: 54px; object-fit: contain; }
+      .brand-name { font-size: 31px; font-weight: 700; letter-spacing: 1px; }
+      .brand-rule { width: 42px; height: 2px; margin-left: 10px; background: #d7a966; }
+      .eyebrow {
+        position: absolute;
+        top: 157px;
+        left: 80px;
+        margin: 0;
+        color: #e5bc80;
+        font-size: 25px;
+        font-weight: 600;
+        letter-spacing: 6px;
+        z-index: 2;
+      }
+      h1 {
+        position: absolute;
+        top: 203px;
+        left: 76px;
+        width: 930px;
+        margin: 0;
+        font-size: 80px;
+        font-weight: 700;
+        line-height: 1.08;
+        letter-spacing: -2.5px;
+        text-shadow: 0 8px 30px rgba(1, 8, 17, .15);
+        z-index: 2;
+      }
+      h1 em { color: #e4bb7e; font-style: normal; }
+      .description {
+        position: absolute;
+        top: 382px;
+        left: 80px;
+        width: 890px;
+        margin: 0;
+        color: #d7dfeb;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1.35;
+        z-index: 2;
+      }
+      .ui-frame {
+        position: absolute;
+        top: 494px;
+        left: 112px;
+        width: 856px;
+        height: 1712px;
+        padding: 13px;
+        overflow: hidden;
+        border-radius: 68px;
+        background: #09111d;
+        border: 2px solid rgba(237, 204, 153, .56);
+        box-shadow: 0 0 0 9px rgba(10, 19, 32, .68), 0 35px 95px rgba(2, 7, 15, .56);
+        z-index: 1;
+      }
+      .ui-frame img {
+        display: block;
+        width: 826px;
+        height: 1652px;
+        object-fit: cover;
+        object-position: top center;
+        border-radius: 53px 53px 0 0;
+      }
+      .canvas.excerpt .ui-frame {
+        top: 520px;
+        left: 35px;
+        width: 1010px;
+        height: 1172px;
+        border-radius: 56px;
+      }
+      .canvas.excerpt .ui-frame img {
+        width: 978px;
+        height: 1142px;
+        object-fit: fill;
+        border-radius: 42px;
+      }
+      .chapter {
+        position: absolute;
+        top: 68px;
+        right: 80px;
+        color: rgba(233, 206, 165, .8);
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="canvas">
+      <div class="brand">
+        <div class="brand-mark"><img src="../../assets/branding/batasph_logo_mark_1024.png" alt="" /></div>
+        <div class="brand-name">BatasPH</div>
+        <div class="brand-rule"></div>
+      </div>
+      <div class="chapter" id="chapter"></div>
+      <p class="eyebrow" id="eyebrow"></p>
+      <h1 id="headline"></h1>
+      <p class="description" id="description"></p>
+      <div class="ui-frame"><img id="screenshot" alt="" /></div>
+    </main>
+    <script>
+      const slides = [
+        {
+          eyebrow: "PHILIPPINE LAW ASSISTANT",
+          headline: "LAW, <em>MADE CLEAR.</em>",
+          description: "Ask Philippine law questions in everyday language.",
+          screenshot: "source/home.png",
+        },
+        {
+          eyebrow: "VOICE-FIRST QUESTIONS",
+          headline: "ASK <em>OUT LOUD.</em>",
+          description: "Start with your voice. Type whenever you prefer.",
+          screenshot: "source/voice-landing.png",
+        },
+        {
+          eyebrow: "NATURAL CONVERSATION",
+          headline: "TALK WITH <em>LUNA.</em>",
+          description: "Speak naturally and follow the conversation on screen.",
+          screenshot: "source/live-voice.png",
+        },
+        {
+          eyebrow: "TEXT CHAT",
+          headline: "TYPE YOUR <em>QUESTION.</em>",
+          description: "See the legal basis alongside a plain-language reply.",
+          screenshot: "source/text-chat.png",
+          excerpt: true,
+        },
+      ];
+      const index = Number(new URLSearchParams(location.search).get("slide") || 1) - 1;
+      const slide = slides[Math.max(0, Math.min(slides.length - 1, index))];
+      document.querySelector(".canvas").classList.toggle("excerpt", !!slide.excerpt);
+      document.getElementById("chapter").textContent = String(index + 1).padStart(2, "0") + " / 04";
+      document.getElementById("eyebrow").textContent = slide.eyebrow;
+      document.getElementById("headline").innerHTML = slide.headline;
+      document.getElementById("description").textContent = slide.description;
+      document.getElementById("screenshot").src = slide.screenshot;
+    </script>
+  </body>
+</html>

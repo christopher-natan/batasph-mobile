@@ -30,9 +30,14 @@ class CloudTtsService implements TtsService {
       throw StateError('Cannot synthesize empty text');
     }
 
+    final voice = MySharedPref.getSelectedVoice();
+    final stopwatch = Stopwatch()..start();
+    BatasphLogger.log(
+      '[TTS] Synthesize | voice=$voice | chars=${trimmed.length}',
+    );
     final response = await ApiClient().client.post(
       '/tts/synthesize',
-      data: {'text': trimmed, 'voice': MySharedPref.getSelectedVoice()},
+      data: {'text': trimmed, 'voice': voice},
       options: dio.Options(
         responseType: dio.ResponseType.bytes,
         receiveTimeout: const Duration(seconds: 30),
@@ -41,27 +46,45 @@ class CloudTtsService implements TtsService {
 
     final audioBytes = response.data as Uint8List;
     if (audioBytes.isEmpty) {
+      BatasphLogger.error(
+        '[TTS] Empty audio from backend | voice=$voice'
+        ' | ${stopwatch.elapsedMilliseconds}ms',
+      );
       throw StateError('Empty audio response from TTS backend');
     }
 
+    BatasphLogger.log(
+      '[TTS] Synthesized | ${stopwatch.elapsedMilliseconds}ms'
+      ' | bytes=${audioBytes.length}',
+    );
     return audioBytes;
   }
 
   @override
   Future<void> playAudio(Uint8List audioBytes) async {
     _stopped = false;
+    final stopwatch = Stopwatch()..start();
 
     try {
       final completer = Completer<void>();
       _playCompleter = completer;
 
+      BatasphLogger.debug('[TTS] Play | bytes=${audioBytes.length}');
       await _getPlayer().play(BytesSource(audioBytes, mimeType: 'audio/mpeg'));
       await completer.future;
-    } catch (error) {
+      BatasphLogger.debug(
+        '[TTS] Play ${_stopped ? 'stopped' : 'complete'}'
+        ' | ${stopwatch.elapsedMilliseconds}ms',
+      );
+    } catch (error, stackTrace) {
       if (_stopped) {
         return;
       }
-      BatasphLogger.error('Cloud TTS playback failed: $error');
+      BatasphLogger.error(
+        '[TTS] Playback failed | ${stopwatch.elapsedMilliseconds}ms',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _completePlay();
       rethrow;
     }
@@ -85,6 +108,7 @@ class CloudTtsService implements TtsService {
       if (_player != null &&
           _playCompleter != null &&
           !_playCompleter!.isCompleted) {
+        BatasphLogger.debug('[TTS] Stop requested mid-playback, fading out');
         const steps = 3;
         const stepDuration = Duration(milliseconds: 50);
         for (var index = steps - 1; index >= 0; index--) {

@@ -24,6 +24,7 @@ class MainShellPage extends GetView<MainShellController> {
           Get.find<ChatController>().isTextChatMode.value;
 
       return Scaffold(
+        extendBody: true,
         backgroundColor: _backgroundColorForTab(
           index: currentIndex,
           isDark: isDark,

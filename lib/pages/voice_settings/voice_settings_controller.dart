@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:batasph_mobile/data/local/my_shared_pref.dart';
+import 'package:batasph_mobile/utils/logger_util.dart';
 
 class VoiceSettingsController extends GetxController {
   static const int maxSpeechLanguages = 3;
@@ -25,6 +26,7 @@ class VoiceSettingsController extends GetxController {
   ];
 
   Future<void> setSelectedVoice(String voiceId) async {
+    BatasphLogger.log('[Settings] Voice -> $voiceId');
     selectedVoice.value = voiceId;
     await MySharedPref.setSelectedVoice(voiceId);
   }
@@ -48,6 +50,7 @@ class VoiceSettingsController extends GetxController {
       speechLanguages.add(code);
     }
 
+    BatasphLogger.log('[Settings] Speech languages -> $speechLanguages');
     await MySharedPref.setSpeechLanguages(speechLanguages.toList());
   }
 }

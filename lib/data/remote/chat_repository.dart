@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:batasph_mobile/data/models/chat_greeting_model.dart';
 import 'package:batasph_mobile/data/models/chat_message_model.dart';
 import 'package:batasph_mobile/data/models/chat_source_model.dart';
 import 'package:batasph_mobile/data/models/chat_stream_event.dart';
@@ -123,6 +124,16 @@ class ChatRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<ChatGreetingModel> getGreeting({String? language}) async {
+    final response = await _client.get(
+      '/chat/greeting',
+      queryParameters: language != null && language.isNotEmpty
+          ? {'language': language}
+          : null,
+    );
+    return ChatGreetingModel.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<List<ChatMessageModel>> getHistory({

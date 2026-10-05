@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:batasph_mobile/config/language/answer_language.dart';
 import 'package:batasph_mobile/config/config.dart';
@@ -9,6 +10,7 @@ import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/data/models/chat_message_model.dart';
 import 'package:batasph_mobile/data/models/chat_source_model.dart';
 import 'package:batasph_mobile/data/models/chat_stream_event.dart';
+import 'package:batasph_mobile/pages/report_answer/report_answer_arguments.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/services/chat_service.dart';
 import 'package:batasph_mobile/services/saved_answers_service.dart';
@@ -28,6 +30,9 @@ class ChatController extends GetxController {
   final answerLanguage = MySharedPref.getAnswerLanguage().obs;
   final recentSearches = <String>[].obs;
   final isTextChatMode = false.obs;
+  final isLoadingMore = false.obs;
+  final hasMoreMessages = true.obs;
+  bool _followScrollScheduled = false;
 
   final textController = TextEditingController();
   final scrollController = ScrollController();
@@ -43,6 +48,7 @@ class ChatController extends GetxController {
     textController.addListener(() {
       hasText.value = textController.text.trim().isNotEmpty;
     });
+    scrollController.addListener(_onScroll);
     _syncLocalDisplayState();
     _loadHistory();
   }
@@ -50,6 +56,7 @@ class ChatController extends GetxController {
   @override
   void onClose() {
     _chatService.cancelStream();
+    scrollController.removeListener(_onScroll);
     textController.dispose();
     scrollController.dispose();
     focusNode.dispose();
@@ -72,6 +79,10 @@ class ChatController extends GetxController {
     }
 
     if (normalizedText.length > AppConfig.chatMaxMessageLength) {
+      BatasphLogger.warning(
+        '[Chat] Message rejected: ${normalizedText.length} chars > '
+        '${AppConfig.chatMaxMessageLength} limit',
+      );
       Get.snackbar(
         'Message too long',
         'Keep your question within ${AppConfig.chatMaxMessageLength} characters.',
@@ -97,8 +108,15 @@ class ChatController extends GetxController {
     _syncRecentSearches();
     await _scrollToBottom();
 
+    final stopwatch = Stopwatch()..start();
+    var tokenCount = 0;
+    Duration? firstTokenAt;
+
     try {
       final answerLanguage = MySharedPref.getAnswerLanguage().name;
+      BatasphLogger.log(
+        '[Chat] Send | chars=${normalizedText.length} | language=$answerLanguage',
+      );
       await for (final event in _chatService.streamMessage(
         normalizedText,
         language: answerLanguage,
@@ -114,8 +132,25 @@ class ChatController extends GetxController {
             if (!isStreaming.value) {
               isStreaming.value = true;
             }
+            if (tokenCount == 0) {
+              firstTokenAt = stopwatch.elapsed;
+            }
+            tokenCount++;
             streamingText.value += event.text;
+            _followStreamIfNearBottom();
           case DoneEvent():
+            BatasphLogger.log(
+              '[Chat] Done | ${stopwatch.elapsedMilliseconds}ms'
+              ' | firstToken=${firstTokenAt?.inMilliseconds}ms'
+              ' | tokens=$tokenCount'
+              ' | chars=${streamingText.value.length}'
+              ' | sources=${event.sources.length}'
+              ' | legalBasis=${event.legalBasis.length}'
+              ' | status=${event.status}'
+              ' | lang=${event.responseLanguage}'
+              ' | cached=${event.cached}'
+              ' | noResults=${event.noResults}',
+            );
             messages.add(
               ChatMessageModel(
                 id:
@@ -135,14 +170,17 @@ class ChatController extends GetxController {
             streamingText.value = '';
             await _scrollToBottom();
           case StreamErrorEvent():
-            BatasphLogger.error('Chat stream error: ${event.message}');
+            BatasphLogger.error(
+              '[Chat] Stream error after ${stopwatch.elapsedMilliseconds}ms: '
+              '${event.message}',
+            );
             _handleSendFailure(
               optimisticId: optimisticId,
               failedText: normalizedText,
             );
           case StreamWarningEvent():
             BatasphLogger.warning(
-              'Chat stream warning: ${event.code} ${event.message}',
+              '[Chat] Stream warning: ${event.code} ${event.message}',
             );
           case AudioEvent():
             break;
@@ -150,16 +188,28 @@ class ChatController extends GetxController {
       }
     } on DioException catch (error) {
       if (error.type == DioExceptionType.cancel) {
+        BatasphLogger.log(
+          '[Chat] Stream cancelled after ${stopwatch.elapsedMilliseconds}ms'
+          ' | tokens=$tokenCount',
+        );
         _finalizeCancelledStream();
       } else {
-        BatasphLogger.error('Chat stream failed: ${error.message}');
+        BatasphLogger.error(
+          '[Chat] Stream failed after ${stopwatch.elapsedMilliseconds}ms: '
+          '${error.type.name} ${error.message}',
+          error: error,
+        );
         _handleSendFailure(
           optimisticId: optimisticId,
           failedText: normalizedText,
         );
       }
-    } catch (error) {
-      BatasphLogger.error('Chat stream failed: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Stream failed after ${stopwatch.elapsedMilliseconds}ms',
+        error: error,
+        stackTrace: stackTrace,
+      );
       _handleSendFailure(
         optimisticId: optimisticId,
         failedText: normalizedText,
@@ -198,6 +248,7 @@ class ChatController extends GetxController {
   }
 
   void cancelStream() {
+    BatasphLogger.log('[Chat] Cancel requested by user');
     _chatService.cancelStream();
   }
 
@@ -206,6 +257,7 @@ class ChatController extends GetxController {
     if (text.isEmpty) {
       return;
     }
+    BatasphLogger.log('[Chat] Retrying failed message');
     failedMessageText.value = '';
     sendMessage(text);
   }
@@ -230,12 +282,17 @@ class ChatController extends GetxController {
   }
 
   Future<void> clearChat() async {
+    BatasphLogger.log('[Chat] Clearing history | messages=${messages.length}');
     try {
       await _chatService.clearHistory();
       messages.clear();
       failedMessageText.value = '';
-    } catch (error) {
-      BatasphLogger.error('Failed to clear chat history: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Failed to clear history',
+        error: error,
+        stackTrace: stackTrace,
+      );
       Get.snackbar(
         'Unable to clear chat',
         'Try again in a moment.',
@@ -266,11 +323,16 @@ class ChatController extends GetxController {
       idsToDelete.add(pairedId);
     }
 
+    BatasphLogger.log('[Chat] Deleting messages | ids=$idsToDelete');
     try {
       await _chatService.deleteMessages(idsToDelete);
       messages.removeWhere((item) => idsToDelete.contains(item.id));
-    } catch (error) {
-      BatasphLogger.error('Failed to delete chat messages: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Failed to delete messages',
+        error: error,
+        stackTrace: stackTrace,
+      );
       Get.snackbar(
         'Unable to delete messages',
         'Try again in a moment.',
@@ -305,6 +367,9 @@ class ChatController extends GetxController {
         questionMessage: questionMessage,
         answerMessage: answerMessage,
       );
+      BatasphLogger.log(
+        '[Chat] Saved answer ${isSaved ? 'added' : 'removed'} | id=${answerMessage.id}',
+      );
 
       Get.snackbar(
         isSaved ? 'Saved answer' : 'Removed saved answer',
@@ -313,14 +378,34 @@ class ChatController extends GetxController {
             : 'This question and answer pair was removed from saved answers.',
         snackPosition: SnackPosition.BOTTOM,
       );
-    } catch (error) {
-      BatasphLogger.error('Failed to toggle saved answer: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Failed to toggle saved answer',
+        error: error,
+        stackTrace: stackTrace,
+      );
       Get.snackbar(
         'Unable to update saved answers',
         'Try again in a moment.',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
+  }
+
+  Future<void> reportAnswer(ChatMessageModel answerMessage) async {
+    final questionMessage = _findPairedQuestion(answerMessage);
+    if (answerMessage.isUser || questionMessage == null) {
+      return;
+    }
+
+    focusNode.unfocus();
+    await Get.toNamed(
+      Routes.REPORT_ANSWER,
+      arguments: ReportAnswerArguments(
+        questionMessage: questionMessage,
+        answerMessage: answerMessage,
+      ),
+    );
   }
 
   static int replaceMessageById(
@@ -351,15 +436,103 @@ class ChatController extends GetxController {
     isLoading.value = true;
     try {
       _syncLocalDisplayState();
-      final history = await _chatService.getHistory();
+      // Paged requests come back newest-first; the list is oldest-first.
+      final page = await _chatService.getHistory(limit: AppConfig.chatPageSize);
+      final history = page.reversed.toList();
+      hasMoreMessages.value = history.length >= AppConfig.chatPageSize;
+      BatasphLogger.log(
+        '[Chat] History loaded | messages=${history.length}'
+        ' | hasMore=${hasMoreMessages.value}',
+      );
       messages.assignAll(history);
       await _scrollToBottom();
-    } catch (error) {
-      BatasphLogger.warning('Failed to load chat history: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.warning(
+        '[Chat] Failed to load history',
+        error: error,
+        stackTrace: stackTrace,
+      );
       messages.clear();
     } finally {
       isLoading.value = false;
     }
+  }
+
+  /// Older messages load when the user drags up to the top of the list.
+  /// The direction check keeps programmatic scrolls (the initial jump to
+  /// the bottom) and a short, non-scrolling list from paging by themselves.
+  void _onScroll() {
+    if (!scrollController.hasClients) return;
+    final position = scrollController.position;
+    if (position.userScrollDirection != ScrollDirection.forward) return;
+    if (position.pixels <= position.minScrollExtent + 100) {
+      loadMoreMessages();
+    }
+  }
+
+  Future<void> loadMoreMessages() async {
+    if (isLoadingMore.value || !hasMoreMessages.value || messages.isEmpty) {
+      return;
+    }
+
+    isLoadingMore.value = true;
+    // Prepending grows the list above the viewport; remember how far the
+    // reader was from the top so the view can be put back on the same
+    // message once the new extent is known.
+    final position = scrollController.hasClients
+        ? scrollController.position
+        : null;
+    final extentBefore = position?.maxScrollExtent ?? 0;
+    final pixelsBefore = position?.pixels ?? 0;
+    try {
+      final oldest = messages.first;
+      final page = await _chatService.getHistory(
+        limit: AppConfig.chatPageSize,
+        before: oldest.timestamp,
+      );
+      final older = page.reversed.toList();
+      BatasphLogger.log(
+        '[Chat] Older history loaded | messages=${older.length}'
+        ' | before=${oldest.timestamp.toIso8601String()}',
+      );
+
+      if (older.isEmpty) {
+        hasMoreMessages.value = false;
+        return;
+      }
+
+      messages.insertAll(0, older);
+      hasMoreMessages.value = older.length >= AppConfig.chatPageSize;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollController.hasClients) return;
+        final delta = scrollController.position.maxScrollExtent - extentBefore;
+        scrollController.jumpTo(pixelsBefore + delta);
+      });
+    } catch (error, stackTrace) {
+      BatasphLogger.warning(
+        '[Chat] Failed to load older history',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      isLoadingMore.value = false;
+    }
+  }
+
+  /// Keeps a streaming reply in view, but only when the reader is already at
+  /// the bottom — someone scrolled up reading an earlier answer is not
+  /// yanked back down by every token.
+  void _followStreamIfNearBottom() {
+    if (_followScrollScheduled || !scrollController.hasClients) return;
+    final position = scrollController.position;
+    if (position.maxScrollExtent - position.pixels > 120) return;
+    // Tokens arrive faster than frames; one jump per frame is enough.
+    _followScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _followScrollScheduled = false;
+      if (!scrollController.hasClients) return;
+      scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    });
   }
 
   void _syncLocalDisplayState() {

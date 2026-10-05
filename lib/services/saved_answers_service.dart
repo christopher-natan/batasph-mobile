@@ -61,8 +61,12 @@ class SavedAnswersService extends GetxService {
         parsedItems.add(
           SavedAnswerModel.fromJson(jsonDecode(item) as Map<String, dynamic>),
         );
-      } catch (error) {
-        BatasphLogger.warning('Failed to parse saved answer: $error');
+      } catch (error, stackTrace) {
+        BatasphLogger.warning(
+          '[Saved] Failed to parse saved answer, skipping',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
     }
 

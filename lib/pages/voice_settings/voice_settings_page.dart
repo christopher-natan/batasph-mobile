@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:batasph_mobile/pages/voice_settings/voice_settings_controller.dart';
+import 'package:batasph_mobile/utils/voice_avatar_util.dart';
 
 class VoiceSettingsPage extends GetView<VoiceSettingsController> {
   const VoiceSettingsPage({super.key});
@@ -131,6 +132,10 @@ class _VoiceGroup extends GetView<VoiceSettingsController> {
                   _SettingsRow(
                     icon: Icons.mic_rounded,
                     label: voice['label']!,
+                    avatarAsset: VoiceAvatarUtil.assetFor(voice['id']!),
+                    avatarFallbackColor: VoiceAvatarUtil.fallbackColorFor(
+                      voice['id']!,
+                    ),
                     isSelected: isSelected,
                     onTap: isSelected
                         ? null
@@ -205,6 +210,8 @@ class _SettingsDivider extends StatelessWidget {
 class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String label;
+  final String? avatarAsset;
+  final Color? avatarFallbackColor;
   final bool isSelected;
   final bool locked;
   final VoidCallback? onTap;
@@ -212,6 +219,8 @@ class _SettingsRow extends StatelessWidget {
   const _SettingsRow({
     required this.icon,
     required this.label,
+    this.avatarAsset,
+    this.avatarFallbackColor,
     required this.isSelected,
     this.locked = false,
     this.onTap,
@@ -228,20 +237,11 @@ class _SettingsRow extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
         child: Row(
           children: [
-            Container(
-              width: 34.w,
-              height: 34.w,
-              decoration: BoxDecoration(
-                color:
-                    (isSelected ? theme.colorScheme.primary : theme.hintColor)
-                        .withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10.r),
-              ),
-              child: Icon(
-                icon,
-                size: 18.sp,
-                color: isSelected ? theme.colorScheme.primary : theme.hintColor,
-              ),
+            _LeadingVisual(
+              icon: icon,
+              avatarAsset: avatarAsset,
+              avatarFallbackColor: avatarFallbackColor,
+              isSelected: isSelected,
             ),
             SizedBox(width: 12.w),
             Expanded(
@@ -263,6 +263,77 @@ class _SettingsRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LeadingVisual extends StatelessWidget {
+  final IconData icon;
+  final String? avatarAsset;
+  final Color? avatarFallbackColor;
+  final bool isSelected;
+
+  const _LeadingVisual({
+    required this.icon,
+    required this.avatarAsset,
+    required this.avatarFallbackColor,
+    required this.isSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: 40.w,
+      height: 40.w,
+      decoration: BoxDecoration(
+        color: avatarAsset == null
+            ? (isSelected ? theme.colorScheme.primary : theme.hintColor)
+                  .withValues(alpha: 0.12)
+            : null,
+        borderRadius: BorderRadius.circular(12.r),
+        border: Border.all(
+          color: isSelected
+              ? theme.colorScheme.primary.withValues(alpha: 0.26)
+              : theme.dividerColor.withValues(alpha: 0.12),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: avatarAsset != null
+          ? Image.asset(
+              avatarAsset!,
+              fit: BoxFit.cover,
+              cacheWidth: 160,
+              errorBuilder: (_, _, _) => _AvatarFallback(
+                color:
+                    avatarFallbackColor ??
+                    theme.colorScheme.primary.withValues(alpha: 0.8),
+                icon: icon,
+              ),
+            )
+          : _AvatarFallback(
+              color:
+                  avatarFallbackColor ??
+                  (isSelected ? theme.colorScheme.primary : theme.hintColor),
+              icon: icon,
+            ),
+    );
+  }
+}
+
+class _AvatarFallback extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+
+  const _AvatarFallback({required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: color.withValues(alpha: 0.18),
+      alignment: Alignment.center,
+      child: Icon(icon, size: 18.sp, color: color),
     );
   }
 }

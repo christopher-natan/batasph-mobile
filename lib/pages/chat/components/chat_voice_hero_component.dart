@@ -90,7 +90,7 @@ class _ProminentVoiceHero extends StatelessWidget {
               ),
               SizedBox(height: 10.h),
               Text(
-                'Voice is the fastest way to ask while driving or on the go.',
+                'Talk with Batas after a brief ring and greeting.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: const Color(0xFFD6E0F0),
@@ -108,7 +108,7 @@ class _ProminentVoiceHero extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.12),
                 ),
                 child: Text(
-                  'Tap once to open voice chat',
+                  'Tap to start a voice call',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 14.sp,
@@ -166,7 +166,7 @@ class _CompactVoiceHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Voice-first asking',
+                      'Voice call with Batas',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16.sp,
@@ -175,7 +175,7 @@ class _CompactVoiceHero extends StatelessWidget {
                     ),
                     SizedBox(height: 4.h),
                     Text(
-                      'Open voice chat quickly. Answer language: $answerLanguageLabel.',
+                      'Start a voice conversation in $answerLanguageLabel.',
                       style: TextStyle(
                         color: const Color(0xFFD6E0F0),
                         fontSize: 12.sp,

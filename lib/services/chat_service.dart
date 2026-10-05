@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:batasph_mobile/data/models/chat_greeting_model.dart';
 import 'package:batasph_mobile/data/models/chat_message_model.dart';
 import 'package:batasph_mobile/data/models/chat_stream_event.dart';
 import 'package:batasph_mobile/data/remote/chat_repository.dart';
@@ -27,8 +28,15 @@ class ChatService {
   }
 
   void cancelStream() {
+    if (_cancelToken != null && !_cancelToken!.isCancelled) {
+      BatasphLogger.log('[Chat] Cancelling in-flight stream');
+    }
     _cancelToken?.cancel('User cancelled');
     _cancelToken = null;
+  }
+
+  Future<ChatGreetingModel> getGreeting({String? language}) {
+    return _repository.getGreeting(language: language);
   }
 
   Future<List<ChatMessageModel>> getHistory({int? limit, DateTime? before}) {
@@ -38,8 +46,12 @@ class ChatService {
   Future<void> clearHistory() async {
     try {
       await _repository.clearHistory();
-    } catch (error) {
-      BatasphLogger.error('Failed to clear chat history: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Clear history request failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -47,8 +59,12 @@ class ChatService {
   Future<void> deleteMessages(List<String> messageIds) async {
     try {
       await _repository.deleteMessages(messageIds);
-    } catch (error) {
-      BatasphLogger.error('Failed to delete chat messages: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Chat] Delete messages request failed | ids=$messageIds',
+        error: error,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }

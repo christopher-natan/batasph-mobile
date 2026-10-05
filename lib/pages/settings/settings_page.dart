@@ -183,6 +183,18 @@ class SettingsPage extends GetView<SettingsController> {
                               onTap: controller.openVoiceSettings,
                               isDark: isDark,
                             ),
+                            _CardDivider(isDark: isDark),
+                            Obx(
+                              () => _ActionTile(
+                                icon: Icons.flag_outlined,
+                                title: 'Reported Answers',
+                                subtitle: controller.feedbackReportsCount == 0
+                                    ? 'Review the answers you already flagged as wrong, missing law, or unclear.'
+                                    : '${controller.feedbackReportsCount} answer reports submitted',
+                                onTap: controller.openFeedbackReports,
+                                isDark: isDark,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -227,6 +239,25 @@ class SettingsPage extends GetView<SettingsController> {
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 22.h),
+                      _SectionLabel(title: 'Support'),
+                      SizedBox(height: 10.h),
+                      _PreferenceCard(
+                        isDark: isDark,
+                        child: Obx(
+                          () => _ActionTile(
+                            icon: Icons.bug_report_outlined,
+                            title: 'Share Logs',
+                            subtitle: controller.isSharingLogs.value
+                                ? 'Preparing the latest diagnostic log...'
+                                : 'Send the latest diagnostic log to help us track down a problem.',
+                            onTap: controller.isSharingLogs.value
+                                ? () {}
+                                : controller.shareLogs,
+                            isDark: isDark,
                           ),
                         ),
                       ),

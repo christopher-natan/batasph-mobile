@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:batasph_mobile/config/language/answer_language.dart';
 import 'package:batasph_mobile/config/theme/app_themes.dart';
 import 'package:batasph_mobile/config/theme/my_theme.dart';
@@ -8,11 +9,14 @@ import 'package:batasph_mobile/data/models/user_model.dart';
 import 'package:batasph_mobile/pages/chat/chat_controller.dart';
 import 'package:batasph_mobile/pages/home/home_controller.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
+import 'package:batasph_mobile/services/answer_feedback_service.dart';
 import 'package:batasph_mobile/services/auth_service.dart';
 import 'package:batasph_mobile/services/saved_answers_service.dart';
+import 'package:batasph_mobile/utils/logger_util.dart';
 
 class SettingsController extends GetxController {
   final _authService = Get.find<AuthService>();
+  final _answerFeedbackService = Get.find<AnswerFeedbackService>();
   final _savedAnswersService = Get.find<SavedAnswersService>();
 
   final isDarkMode = (!MySharedPref.getThemeIsLight()).obs;
@@ -40,19 +44,23 @@ class SettingsController extends GetxController {
   String get accountInitials => currentUser.value?.initials ?? 'BT';
 
   int get savedAnswersCount => _savedAnswersService.savedAnswers.length;
+  int get feedbackReportsCount => _answerFeedbackService.feedbackReports.length;
 
   void toggleDarkMode(bool value) {
+    BatasphLogger.log('[Settings] Dark mode -> $value');
     isDarkMode.value = value;
     MySharedPref.setThemeIsLight(!value);
     Get.changeThemeMode(value ? ThemeMode.dark : ThemeMode.light);
   }
 
   void changeAppTheme(AppThemeId themeId) {
+    BatasphLogger.log('[Settings] App theme -> ${themeId.name}');
     currentThemeId.value = themeId.name;
     MyTheme.changeAppTheme(themeId);
   }
 
   void changeAnswerLanguage(AnswerLanguage language) {
+    BatasphLogger.log('[Settings] Answer language -> ${language.name}');
     answerLanguage.value = language;
     MySharedPref.setAnswerLanguage(language);
     if (Get.isRegistered<HomeController>()) {
@@ -87,6 +95,10 @@ class SettingsController extends GetxController {
     Get.toNamed(Routes.SAVED_ANSWERS);
   }
 
+  void openFeedbackReports() {
+    Get.toNamed(Routes.FEEDBACK_REPORTS);
+  }
+
   Future<void> logout() async {
     await _authService.logout();
     Get.snackbar(
@@ -94,5 +106,55 @@ class SettingsController extends GetxController {
       'Your BatasPH account session has been cleared.',
       snackPosition: SnackPosition.BOTTOM,
     );
+  }
+
+  // ─── Diagnostics ───────────────────────────────────────────
+
+  final isSharingLogs = false.obs;
+
+  /// Hands the newest log file to the OS share sheet. The newest file is
+  /// what's wanted nearly every time — the problem just happened — and one
+  /// attachment keeps every share target (mail, Drive, chat) happy.
+  Future<void> shareLogs() async {
+    if (isSharingLogs.value) return;
+    isSharingLogs.value = true;
+    try {
+      // Buffered lines must hit disk before we hand the file over.
+      await BatasphLogger.flush();
+      final files = await BatasphLogger.logFiles();
+      if (files.isEmpty) {
+        BatasphLogger.warning('[Logs] Share requested but no log files exist');
+        Get.snackbar(
+          'No logs yet',
+          'There is no diagnostic log to share on this device.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+        return;
+      }
+
+      final newest = files.first;
+      final name = newest.uri.pathSegments.last;
+      BatasphLogger.log(
+        '[Logs] Sharing $name (${await newest.length()} bytes)',
+      );
+
+      final result = await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(newest.path)],
+          subject: 'BatasPH logs — $name',
+          text: 'BatasPH diagnostic log: $name',
+        ),
+      );
+      BatasphLogger.log('[Logs] Share result: ${result.status.name}');
+    } catch (e, st) {
+      BatasphLogger.error('[Logs] Share failed', error: e, stackTrace: st);
+      Get.snackbar(
+        'Unable to share logs',
+        'Try again in a moment.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      isSharingLogs.value = false;
+    }
   }
 }

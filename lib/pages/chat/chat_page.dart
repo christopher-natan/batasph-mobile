@@ -136,6 +136,7 @@ class _ConversationLayout extends StatelessWidget {
       final streamingText = controller.streamingText.value;
       final failedMessageText = controller.failedMessageText.value;
       final hasText = controller.hasText.value;
+      final isLoadingMore = controller.isLoadingMore.value;
       final savedAnswerIds = controller.savedAnswerIds.toSet();
       final showEmptyState =
           messages.isEmpty &&
@@ -170,6 +171,20 @@ class _ConversationLayout extends StatelessWidget {
                       controller: controller.scrollController,
                       padding: EdgeInsets.only(bottom: 12.h),
                       children: [
+                        if (isLoadingMore)
+                          Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12.h),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18.w,
+                                height: 18.w,
+                                child: const CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF22324D),
+                                ),
+                              ),
+                            ),
+                          ),
                         ...messages.map(
                           (message) => ChatBubbleComponent(
                             message: message,
@@ -177,6 +192,9 @@ class _ConversationLayout extends StatelessWidget {
                             onToggleSaved: message.isUser
                                 ? null
                                 : () => controller.toggleSavedAnswer(message),
+                            onReport: message.isUser
+                                ? null
+                                : () => controller.reportAnswer(message),
                             onDelete: message.id.startsWith('temp_')
                                 ? null
                                 : () => controller.deleteMessagePair(message),

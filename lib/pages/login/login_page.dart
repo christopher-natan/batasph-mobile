@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:batasph_mobile/components/google_sign_in_button_component.dart';
+import 'package:batasph_mobile/components/or_divider_component.dart';
 import 'package:batasph_mobile/pages/login/login_controller.dart';
 
 class LoginPage extends GetView<LoginController> {
@@ -68,14 +70,19 @@ class LoginPage extends GetView<LoginController> {
                   ),
                 ),
               ),
-              SizedBox(height: 24.h),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: controller.goToForgotPassword,
+                  child: const Text('Forgot password?'),
+                ),
+              ),
+              SizedBox(height: 8.h),
               Obx(
                 () => SizedBox(
                   height: 52.h,
                   child: ElevatedButton(
-                    onPressed: controller.isLoading.value
-                        ? null
-                        : controller.login,
+                    onPressed: controller.isBusy ? null : controller.login,
                     child: controller.isLoading.value
                         ? SizedBox(
                             width: 22.w,
@@ -86,6 +93,17 @@ class LoginPage extends GetView<LoginController> {
                           )
                         : const Text('Sign in'),
                   ),
+                ),
+              ),
+              SizedBox(height: 20.h),
+              const OrDividerComponent(),
+              SizedBox(height: 20.h),
+              Obx(
+                () => GoogleSignInButtonComponent(
+                  isLoading: controller.isGoogleLoading.value,
+                  onPressed: controller.isBusy
+                      ? null
+                      : controller.signInWithGoogle,
                 ),
               ),
               SizedBox(height: 14.h),

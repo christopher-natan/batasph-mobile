@@ -19,11 +19,14 @@ class _VoiceChatPageState extends State<VoiceChatPage>
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
   late final AnimationController _waveController;
+  Future<void>? _closingFuture;
+  bool _canPop = false;
 
   @override
   void initState() {
     super.initState();
     _controller = Get.find<VoiceChatController>();
+    _controller.onFarewellComplete = _close;
 
     _pulseController = AnimationController(
       vsync: this,
@@ -40,21 +43,26 @@ class _VoiceChatPageState extends State<VoiceChatPage>
     )..repeat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controller.startListening();
+      _controller.startCall();
     });
   }
 
   @override
   void dispose() {
+    _controller.onFarewellComplete = null;
     _pulseController.dispose();
     _waveController.dispose();
     super.dispose();
   }
 
-  Future<void> _close() async {
+  Future<void> _close() => _closingFuture ??= _closeCall();
+
+  Future<void> _closeCall() async {
     await _controller.endConversation();
     if (mounted) {
-      Get.back();
+      setState(() => _canPop = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted) Get.back();
     }
   }
 
@@ -63,7 +71,7 @@ class _VoiceChatPageState extends State<VoiceChatPage>
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: PopScope(
-        canPop: false,
+        canPop: _canPop,
         onPopInvokedWithResult: (didPop, result) async {
           if (didPop) {
             return;
@@ -123,7 +131,7 @@ class _VoiceChatPageState extends State<VoiceChatPage>
                   ),
                   Padding(
                     padding: EdgeInsets.fromLTRB(24.w, 10.h, 24.w, 24.h),
-                    child: _EndButton(onClose: _close),
+                    child: _CallControls(onClose: _close),
                   ),
                 ],
               ),
@@ -197,36 +205,38 @@ class _TopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 6.h),
-      child: Row(
-        children: [
-          _CircleActionButton(icon: Icons.close_rounded, onTap: onClose),
-          SizedBox(width: 14.w),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Voice Chat',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.w700,
+      child: Obx(
+        () => Row(
+          children: [
+            _CircleActionButton(icon: Icons.close_rounded, onTap: onClose),
+            SizedBox(width: 14.w),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    controller.selectedVoiceLabel,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  'Minimal hands-free legal asking',
-                  style: TextStyle(
-                    color: const Color(0xFFAEB9CB),
-                    fontSize: 12.sp,
-                    fontWeight: FontWeight.w500,
+                  SizedBox(height: 2.h),
+                  Text(
+                    'Call in progress • ${controller.callDurationLabel}',
+                    style: TextStyle(
+                      color: const Color(0xFFAEB9CB),
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Obx(() => _StatusChip(state: controller.state.value)),
-        ],
+            _StatusChip(state: controller.state.value),
+          ],
+        ),
       ),
     );
   }
@@ -269,6 +279,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, color) = switch (state) {
       VoiceChatState.idle => ('Ready', const Color(0xFFE2BF85)),
+      VoiceChatState.connecting => ('Calling', const Color(0xFFF0B46A)),
       VoiceChatState.listening => ('Listening', const Color(0xFFF4B257)),
       VoiceChatState.processing => ('Processing', const Color(0xFFD28A43)),
       VoiceChatState.speaking => ('Speaking', const Color(0xFFF2C57E)),
@@ -409,7 +420,11 @@ class _VoiceHero extends StatelessWidget {
                 SizedBox(height: (22.h * scale).clamp(12.h, 22.h)),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: controller.interrupt,
+                  onTap:
+                      state == VoiceChatState.idle ||
+                          state == VoiceChatState.error
+                      ? controller.handlePrimaryControlTap
+                      : null,
                   child: SizedBox(
                     width: orbFrameSize,
                     height: orbFrameSize,
@@ -428,9 +443,12 @@ class _VoiceHero extends StatelessWidget {
                 if (showSupportText) ...[
                   SizedBox(height: (10.h * scale).clamp(6.h, 10.h)),
                   Text(
-                    state == VoiceChatState.speaking
-                        ? 'Tap the mic to interrupt.'
-                        : 'Animation-ready mic orb for the next visual pass.',
+                    state == VoiceChatState.error ||
+                            state == VoiceChatState.idle
+                        ? 'Tap the center to try the call again.'
+                        : state == VoiceChatState.connecting
+                        ? 'The call is connecting.'
+                        : 'Say goodbye when you are done, or end the call below.',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -452,24 +470,28 @@ class _VoiceHero extends StatelessWidget {
   (String, String) _copyForState(VoiceChatState state) {
     return switch (state) {
       VoiceChatState.idle => (
-        'Speak when ready.',
-        'BatasPH is ready to listen, process, and answer aloud.',
+        'Call is ready.',
+        'Tap the center to start a new conversation.',
+      ),
+      VoiceChatState.connecting => (
+        'Calling ${controller.selectedVoiceLabel}...',
+        'A short ring plays before the selected voice greets you.',
       ),
       VoiceChatState.listening => (
-        'Listening closely.',
-        'Ask naturally. We will capture the transcript below.',
+        '${controller.selectedVoiceLabel} is listening.',
+        'Ask naturally. Your transcript stays visible below.',
       ),
       VoiceChatState.processing => (
         'Checking the law.',
-        'The system is grounding your answer before speaking.',
+        'The system is grounding your answer before speaking it back.',
       ),
       VoiceChatState.speaking => (
-        'Speaking now.',
-        'The answer is being read aloud. Interrupt if needed.',
+        '${controller.selectedVoiceLabel} is speaking.',
+        'Your conversation continues when the reply finishes.',
       ),
       VoiceChatState.error => (
-        'Voice needs a retry.',
-        'Use the mic again or close and reopen the voice session.',
+        'Call needs a retry.',
+        'Tap the center to try again, or end the call.',
       ),
     };
   }
@@ -488,6 +510,11 @@ class _StatePill extends StatelessWidget {
         'Ready',
         Icons.mic_none_rounded,
         const Color(0xFFE2BF85),
+      ),
+      VoiceChatState.connecting => (
+        'Calling',
+        Icons.call_rounded,
+        const Color(0xFFF0B46A),
       ),
       VoiceChatState.listening => (
         'Listening',
@@ -679,7 +706,7 @@ class _TranscriptPlaceholder extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          'Transcript and reply will stay visible here during voice chat.',
+          'The selected voice will greet you first, then your transcript and reply will stay visible here.',
           textAlign: TextAlign.center,
           style: TextStyle(
             color: const Color(0xFFAAB6C9),
@@ -727,24 +754,23 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-class _EndButton extends StatelessWidget {
+class _CallControls extends StatelessWidget {
   final Future<void> Function() onClose;
 
-  const _EndButton({required this.onClose});
+  const _CallControls({required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
+      child: FilledButton.icon(
         onPressed: onClose,
-        icon: const Icon(Icons.call_end_outlined),
-        label: const Text('End voice chat'),
-        style: OutlinedButton.styleFrom(
+        icon: const Icon(Icons.call_end_rounded),
+        label: const Text('End call'),
+        style: FilledButton.styleFrom(
           foregroundColor: Colors.white,
+          backgroundColor: const Color(0xFFB7493B),
           padding: EdgeInsets.symmetric(vertical: 16.h),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-          backgroundColor: Colors.white.withValues(alpha: 0.04),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22.r),
           ),
@@ -785,13 +811,16 @@ class _VoiceOrb extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final state = controller.state.value;
+      final avatarAsset = controller.selectedVoiceAvatarAsset;
       final isListening = state == VoiceChatState.listening;
+      final isConnecting = state == VoiceChatState.connecting;
       final isProcessing = state == VoiceChatState.processing;
       final isSpeaking = state == VoiceChatState.speaking;
-      final isActive = isListening || isSpeaking;
+      final isActive = isListening || isSpeaking || isConnecting;
 
       final orbColor = switch (state) {
         VoiceChatState.idle => const Color(0xFFC8843C),
+        VoiceChatState.connecting => const Color(0xFFD89445),
         VoiceChatState.listening => const Color(0xFFD89445),
         VoiceChatState.processing => const Color(0xFFB97537),
         VoiceChatState.speaking => const Color(0xFFE2BF85),
@@ -834,24 +863,24 @@ class _VoiceOrb extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: isProcessing
-                        ? Center(
-                            child: SizedBox(
-                              width: 34.w,
-                              height: 34.w,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.6,
-                                color: Colors.white.withValues(alpha: 0.9),
+                    child: ClipOval(
+                      child: isProcessing
+                          ? Center(
+                              child: SizedBox(
+                                width: 34.w,
+                                height: 34.w,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.6,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
                               ),
+                            )
+                          : _buildOrbVisual(
+                              avatarAsset: avatarAsset,
+                              isSpeaking: isSpeaking,
+                              isConnecting: isConnecting,
                             ),
-                          )
-                        : Icon(
-                            isSpeaking
-                                ? Icons.volume_up_rounded
-                                : Icons.mic_rounded,
-                            color: Colors.white,
-                            size: 52.sp,
-                          ),
+                    ),
                   ),
                 ),
               ),
@@ -860,6 +889,43 @@ class _VoiceOrb extends StatelessWidget {
         ),
       );
     });
+  }
+
+  Widget _buildOrbVisual({
+    required String? avatarAsset,
+    required bool isSpeaking,
+    required bool isConnecting,
+  }) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (avatarAsset != null)
+          Image.asset(
+            avatarAsset,
+            fit: BoxFit.cover,
+            cacheWidth: 360,
+            errorBuilder: (_, _, _) => _buildFallbackIcon(isSpeaking),
+          )
+        else
+          _buildFallbackIcon(isSpeaking),
+        if (isConnecting)
+          Container(color: const Color(0xFF121A27).withValues(alpha: 0.32)),
+        if (isConnecting)
+          Center(
+            child: Icon(Icons.call_rounded, color: Colors.white, size: 42.sp),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFallbackIcon(bool isSpeaking) {
+    return Center(
+      child: Icon(
+        isSpeaking ? Icons.volume_up_rounded : Icons.mic_rounded,
+        color: Colors.white,
+        size: 52.sp,
+      ),
+    );
   }
 }
 

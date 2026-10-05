@@ -49,9 +49,16 @@ class HomeController extends GetxController {
 
     try {
       final questions = await _starterQuestionsService.getRandomQuestions();
+      BatasphLogger.log(
+        '[Home] Starter questions loaded | count=${questions.length}',
+      );
       starterQuestions.assignAll(questions);
-    } catch (error) {
-      BatasphLogger.error('Failed to load starter questions: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[Home] Failed to load starter questions',
+        error: error,
+        stackTrace: stackTrace,
+      );
       starterQuestions.clear();
       starterQuestionsError.value =
           'Unable to load starter questions right now.';

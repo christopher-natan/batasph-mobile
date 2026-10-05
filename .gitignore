@@ -19,10 +19,13 @@ MAlonzo/**
 # Android
 android/.kotlin/
 android/key.properties
-android/app/memori-release.jks
+android/app/batasph-release.jks
 
 # Build artifacts
 build/
 
 # Resources
 resources/
+
+# Agent scratch
+.codex-tmp/

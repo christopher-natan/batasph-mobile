@@ -7,6 +7,7 @@ class ChatBubbleComponent extends StatelessWidget {
   final ChatMessageModel message;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleSaved;
+  final VoidCallback? onReport;
   final bool isSaved;
 
   const ChatBubbleComponent({
@@ -14,6 +15,7 @@ class ChatBubbleComponent extends StatelessWidget {
     required this.message,
     this.onDelete,
     this.onToggleSaved,
+    this.onReport,
     this.isSaved = false,
   });
 
@@ -46,6 +48,7 @@ class ChatBubbleComponent extends StatelessWidget {
                 theme: theme,
                 onDelete: onDelete,
                 onToggleSaved: onToggleSaved,
+                onReport: onReport,
                 isSaved: isSaved,
                 message: message,
               ),
@@ -112,6 +115,7 @@ class _BubbleHeader extends StatelessWidget {
   final ThemeData theme;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleSaved;
+  final VoidCallback? onReport;
   final bool isSaved;
   final ChatMessageModel message;
 
@@ -120,6 +124,7 @@ class _BubbleHeader extends StatelessWidget {
     required this.theme,
     required this.onDelete,
     required this.onToggleSaved,
+    required this.onReport,
     required this.isSaved,
     required this.message,
   });
@@ -161,6 +166,20 @@ class _BubbleHeader extends StatelessWidget {
               color: isSaved ? const Color(0xFFA77B43) : theme.hintColor,
             ),
           ),
+        if (onReport != null)
+          IconButton(
+            onPressed: onReport,
+            tooltip: 'Report answer',
+            visualDensity: VisualDensity.compact,
+            splashRadius: 18.r,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(width: 28.w, height: 28.w),
+            icon: Icon(
+              Icons.flag_outlined,
+              size: 17.sp,
+              color: theme.hintColor,
+            ),
+          ),
         _DeleteMenu(iconColor: theme.hintColor, onDelete: onDelete),
       ],
     );
@@ -168,12 +187,16 @@ class _BubbleHeader extends StatelessWidget {
 
   String get _label {
     switch (message.status) {
+      case 'ok':
+        return 'Grounded in legal text';
       case 'general_guidance':
         return 'General legal guidance';
       case 'low_confidence':
         return 'Low-confidence reply';
+      case 'error':
+        return 'Service issue';
       default:
-        return 'Grounded in legal text';
+        return 'Assistant reply';
     }
   }
 }

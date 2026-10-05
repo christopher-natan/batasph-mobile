@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
+import 'package:batasph_mobile/components/google_sign_in_button_component.dart';
+import 'package:batasph_mobile/components/or_divider_component.dart';
 import 'package:batasph_mobile/pages/register/register_controller.dart';
 
 class RegisterPage extends GetView<RegisterController> {
@@ -99,9 +101,7 @@ class RegisterPage extends GetView<RegisterController> {
                 () => SizedBox(
                   height: 52.h,
                   child: ElevatedButton(
-                    onPressed: controller.isLoading.value
-                        ? null
-                        : controller.register,
+                    onPressed: controller.isBusy ? null : controller.register,
                     child: controller.isLoading.value
                         ? SizedBox(
                             width: 22.w,
@@ -112,6 +112,17 @@ class RegisterPage extends GetView<RegisterController> {
                           )
                         : const Text('Create account'),
                   ),
+                ),
+              ),
+              SizedBox(height: 20.h),
+              const OrDividerComponent(),
+              SizedBox(height: 20.h),
+              Obx(
+                () => GoogleSignInButtonComponent(
+                  isLoading: controller.isGoogleLoading.value,
+                  onPressed: controller.isBusy
+                      ? null
+                      : controller.signInWithGoogle,
                 ),
               ),
               SizedBox(height: 14.h),

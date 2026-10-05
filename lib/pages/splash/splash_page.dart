@@ -8,10 +8,9 @@ class SplashPage extends GetView<SplashController> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF0F2420) : Colors.white;
-    final titleColor = isDark ? Colors.white : const Color(0xFF1A2332);
-    final taglineColor = isDark ? Colors.white54 : const Color(0xFF6F7E8D);
+    const bg = Color(0xFF2C3550);
+    const titleColor = Color(0xFFF5F1EA);
+    const taglineColor = Color(0xFFD7A96A);
 
     return Scaffold(
       backgroundColor: bg,
@@ -21,8 +20,8 @@ class SplashPage extends GetView<SplashController> {
           children: [
             Image.asset(
               'assets/images/logo.png',
-              width: 100.w,
-              height: 100.w,
+              width: 132.w,
+              height: 132.w,
             ),
             SizedBox(height: 20.h),
             Text(

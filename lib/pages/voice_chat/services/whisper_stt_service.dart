@@ -15,7 +15,7 @@ import 'package:batasph_mobile/pages/voice_chat/services/stt_service.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/whisper_turn_detector.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
-class WhisperSttService implements SttService {
+class WhisperSttService extends SttService {
   static const double _silenceThresholdDb = -45.0;
   static const int _sampleRate = 16000;
   static const int _bitRate = 32000;
@@ -59,15 +59,9 @@ class WhisperSttService implements SttService {
   Timer? _speechStartWatchdog;
   Timer? _maxRecordingTimer;
 
-  @override
-  SttResultCallback? onResult;
-  @override
-  SttErrorCallback? onError;
-  @override
-  SttTranscribingCallback? onTranscribing;
-
   bool _isActive = false;
   int _sessionId = 0;
+  Stopwatch? _sessionStopwatch;
 
   @override
   bool get isActive => _isActive;
@@ -83,11 +77,15 @@ class WhisperSttService implements SttService {
 
     _isActive = true;
     final sessionId = ++_sessionId;
+    _sessionStopwatch = Stopwatch()..start();
     _cancelSpeechStartWatchdog();
 
     try {
       final hasPermission = await AudioRecorder().hasPermission();
       if (!hasPermission) {
+        BatasphLogger.warning(
+          '[STT] Microphone permission denied | session=$sessionId',
+        );
         throw StateError('Microphone permission was denied');
       }
 
@@ -112,6 +110,11 @@ class WhisperSttService implements SttService {
         speechThresholdDb: _silenceThresholdDb,
         silenceWindowSamples: silenceWindowSamples,
       );
+      BatasphLogger.log(
+        '[STT] Recording started | session=$sessionId'
+        ' | silence=${silenceSeconds}s -> window=$silenceWindowSamples samples'
+        ' | threshold=${_silenceThresholdDb}dB',
+      );
 
       _amplitudeSubscription = _recorder!
           .onAmplitudeChanged(_amplitudeInterval)
@@ -121,18 +124,32 @@ class WhisperSttService implements SttService {
             final hasDetectedSpeech = _turnDetector!.hasDetectedSpeech;
 
             if (!hadDetectedSpeech && hasDetectedSpeech) {
+              BatasphLogger.log(
+                '[STT] Speech detected | session=$sessionId'
+                ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms'
+                ' | ${amplitude.current.toStringAsFixed(1)}dB',
+              );
               _cancelSpeechStartWatchdog();
+              onSpeechStarted?.call();
             }
 
             if (action == WhisperTurnAction.stopForEndOfSpeech && _isActive) {
+              BatasphLogger.log(
+                '[STT] End of speech | session=$sessionId'
+                ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms',
+              );
               _stopAndTranscribe();
             }
           });
 
       _armSpeechStartWatchdog(sessionId);
       _armMaxRecordingTimer(sessionId);
-    } catch (error) {
-      BatasphLogger.error('Failed to start Whisper STT session: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[STT] Failed to start session | session=$sessionId',
+        error: error,
+        stackTrace: stackTrace,
+      );
       onError?.call('Failed to start recording');
       _isActive = false;
       await _cleanup();
@@ -149,6 +166,12 @@ class WhisperSttService implements SttService {
 
   @override
   Future<void> cancelSession() async {
+    if (_isActive) {
+      BatasphLogger.log(
+        '[STT] Session cancelled | session=$_sessionId'
+        ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms',
+      );
+    }
     _isActive = false;
     await _cleanup();
   }
@@ -171,14 +194,22 @@ class WhisperSttService implements SttService {
     String? filePath;
     try {
       filePath = await _recorder?.stop();
-    } catch (error) {
-      BatasphLogger.error('Failed to stop Whisper STT recorder: $error');
+    } catch (error, stackTrace) {
+      BatasphLogger.error(
+        '[STT] Failed to stop recorder | session=$capturedSessionId',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
 
     _recorder?.dispose();
     _recorder = null;
 
     if (capturedSessionId != _sessionId) {
+      BatasphLogger.log(
+        '[STT] Recording discarded, session superseded'
+        ' | session=$capturedSessionId | current=$_sessionId',
+      );
       if (filePath != null) {
         _deleteFile(filePath);
       }
@@ -186,6 +217,9 @@ class WhisperSttService implements SttService {
     }
 
     if (filePath == null || filePath.isEmpty) {
+      BatasphLogger.warning(
+        '[STT] Recorder returned no file | session=$capturedSessionId',
+      );
       onResult?.call('', true);
       return;
     }
@@ -194,12 +228,21 @@ class WhisperSttService implements SttService {
     final exists = file.existsSync();
     final size = exists ? file.lengthSync() : 0;
     if (!exists || size < 1000) {
+      BatasphLogger.log(
+        '[STT] Recording too small, treated as silence'
+        ' | session=$capturedSessionId | exists=$exists | bytes=$size',
+      );
       onResult?.call('', true);
       _deleteFile(filePath);
       return;
     }
 
+    BatasphLogger.log(
+      '[STT] Uploading | session=$capturedSessionId | bytes=$size'
+      ' | recorded=${_sessionStopwatch?.elapsedMilliseconds}ms',
+    );
     onTranscribing?.call();
+    final uploadStopwatch = Stopwatch()..start();
 
     try {
       final languages = MySharedPref.getSpeechLanguages();
@@ -221,20 +264,34 @@ class WhisperSttService implements SttService {
       );
 
       if (capturedSessionId != _sessionId) {
+        BatasphLogger.log(
+          '[STT] Transcript discarded, session superseded'
+          ' | session=$capturedSessionId | current=$_sessionId',
+        );
         return;
       }
 
       final text = response.data['text'] as String?;
+      BatasphLogger.log(
+        '[STT] Transcribed | session=$capturedSessionId'
+        ' | ${uploadStopwatch.elapsedMilliseconds}ms'
+        ' | chars=${text?.trim().length ?? 0}',
+      );
       if (text != null && text.trim().isNotEmpty) {
         onResult?.call(text.trim(), true);
       } else {
         onResult?.call('', true);
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
       if (capturedSessionId != _sessionId) {
         return;
       }
-      BatasphLogger.error('Whisper transcription failed: $error');
+      BatasphLogger.error(
+        '[STT] Transcription failed | session=$capturedSessionId'
+        ' | ${uploadStopwatch.elapsedMilliseconds}ms',
+        error: error,
+        stackTrace: stackTrace,
+      );
       onError?.call('Transcription failed');
     } finally {
       _deleteFile(filePath);
@@ -271,6 +328,10 @@ class WhisperSttService implements SttService {
         return;
       }
 
+      BatasphLogger.log(
+        '[STT] No speech within ${_speechStartTimeout.inSeconds}s'
+        ' | session=$sessionId',
+      );
       await cancelSession();
       onResult?.call('', true);
     });
@@ -287,6 +348,10 @@ class WhisperSttService implements SttService {
       if (!_isActive || sessionId != _sessionId) {
         return;
       }
+      BatasphLogger.log(
+        '[STT] Max recording ${_maxRecordingDuration.inSeconds}s reached'
+        ' | session=$sessionId',
+      );
       _stopAndTranscribe();
     });
   }
@@ -312,5 +377,7 @@ class WhisperSttService implements SttService {
     onResult = null;
     onError = null;
     onTranscribing = null;
+    onSpeechStarted = null;
+    onIdle = null;
   }
 }

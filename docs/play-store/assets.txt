@@ -1,0 +1,27 @@
+Short description - 0 / 80
+Full description
+
+Manage your app icon, screenshots and videos to promote your app on Google Play. Review the content guidelines before uploading new graphics. If you add translations for your store listing without localised graphics, we will use the graphics from your default language.
+
+App icon
+
+*
+Your app icon must be a PNG or JPEG, up to 1 MB, 512 px by 512 px, and meet our design specifications and metadata policy
+Feature graphic
+
+*
+Your featured graphic must be a PNG or JPEG, up to 15 MB and 1024 px by 500 px. This graphic will be used when you choose to feature your app. Learn more
+Video
+Add a video by entering a YouTube URL. This video must be public or unlisted, ads must be turned off and it must not be age restricted.
+https://www.youtube.com/watch?v=
+
+
+Phone assets
+*
+Phone screenshots
+
+*
+Upload 2–8 phone screenshots. Screenshots must be PNG or JPEG, up to 8 MB each, 16:9 or 9:16 aspect ratio, with each side between 320 px and 3,840 px
+To be eligible for promotion, include at least 4 screenshots at a minimum of 1080 px on each side.
+
+

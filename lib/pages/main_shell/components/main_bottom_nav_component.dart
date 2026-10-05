@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
@@ -19,68 +17,125 @@ class MainBottomNavComponent extends StatelessWidget {
 
     return SafeArea(
       top: false,
-      minimum: EdgeInsets.fromLTRB(18.w, 0, 18.w, 10.h),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28.r),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 7.h),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                        const Color(0xFF182232).withValues(alpha: 0.54),
-                        const Color(0xFF121A25).withValues(alpha: 0.46),
-                      ]
-                    : [
-                        const Color(0xFFFFFCF5).withValues(alpha: 0.56),
-                        const Color(0xFFF3EBDC).withValues(alpha: 0.44),
-                      ],
-              ),
-              borderRadius: BorderRadius.circular(28.r),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : const Color(0xFFF6EFE3).withValues(alpha: 0.6),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(
-                    0xFF1E2837,
-                  ).withValues(alpha: isDark ? 0.1 : 0.06),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+      minimum: EdgeInsets.fromLTRB(18.w, 0, 18.w, 12.h),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 6.w),
+        child: Row(
+          children: [
+            _SideNavItem(
+              label: 'Home',
+              icon: Icons.home_outlined,
+              selectedIcon: Icons.home_rounded,
+              isSelected: currentIndex == 0,
+              isDark: isDark,
+              onTap: () => onTap(0),
             ),
-            child: Row(
-              children: [
-                _MainBottomNavItem(
-                  label: 'Home',
-                  icon: Icons.home_outlined,
-                  activeIcon: Icons.home_rounded,
-                  isSelected: currentIndex == 0,
-                  onTap: () => onTap(0),
+            SizedBox(width: 8.w),
+            _VoiceChatNavItem(
+              isSelected: currentIndex == 1,
+              onTap: () => onTap(1),
+            ),
+            SizedBox(width: 8.w),
+            _SideNavItem(
+              label: 'Settings',
+              icon: Icons.settings_outlined,
+              selectedIcon: Icons.settings_rounded,
+              isSelected: currentIndex == 2,
+              isDark: isDark,
+              onTap: () => onTap(2),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SideNavItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SideNavItem({
+    required this.label,
+    required this.icon,
+    required this.selectedIcon,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedColor = isDark
+        ? const Color(0xFFF2D8AA)
+        : const Color(0xFF24334D);
+    final idleColor = isDark
+        ? const Color(0xFF9DAFC5)
+        : const Color(0xFF757B80);
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(22.r),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              height: 66.h,
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? (isDark
+                          ? const Color(0xFF29384B)
+                          : const Color(0xFFF4EADB))
+                    : (isDark
+                          ? const Color(0xFF192434)
+                          : const Color(0xFFFFFBF4)),
+                borderRadius: BorderRadius.circular(22.r),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF344157)
+                      : const Color(0xFFE8DDCB),
                 ),
-                _MainBottomNavItem(
-                  label: 'Ask',
-                  icon: Icons.question_answer_outlined,
-                  activeIcon: Icons.question_answer_rounded,
-                  isSelected: currentIndex == 1,
-                  onTap: () => onTap(1),
-                  isPrimary: true,
-                ),
-                _MainBottomNavItem(
-                  label: 'Settings',
-                  icon: Icons.settings_outlined,
-                  activeIcon: Icons.settings_rounded,
-                  isSelected: currentIndex == 2,
-                  onTap: () => onTap(2),
-                ),
-              ],
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF152238).withValues(
+                      alpha: isDark ? 0.28 : 0.10,
+                    ),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isSelected ? selectedIcon : icon,
+                    color: isSelected ? selectedColor : idleColor,
+                    size: 23.sp,
+                  ),
+                  SizedBox(height: 4.h),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: isSelected ? selectedColor : idleColor,
+                      fontSize: 11.sp,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -89,122 +144,83 @@ class MainBottomNavComponent extends StatelessWidget {
   }
 }
 
-class _MainBottomNavItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final IconData activeIcon;
+class _VoiceChatNavItem extends StatelessWidget {
   final bool isSelected;
-  final bool isPrimary;
   final VoidCallback onTap;
 
-  const _MainBottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.activeIcon,
-    required this.isSelected,
-    required this.onTap,
-    this.isPrimary = false,
-  });
+  const _VoiceChatNavItem({required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final activeBackground = isDark
-        ? const Color(0xFF24334D)
-        : const Color(0xFF283856);
-    final activeTextColor = Colors.white;
-    final inactiveTextColor = isDark
-        ? const Color(0xFFA8B3C6)
-        : const Color(0xFF6E746F);
-    final inactiveIconColor = isDark
-        ? const Color(0xFF9EABC0)
-        : const Color(0xFF6E746F);
-
     return Expanded(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 3.w),
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: 'Voice and Chat',
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(20.r),
+            borderRadius: BorderRadius.circular(22.r),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 8.h),
+              height: 66.h,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20.r),
-                gradient: isSelected
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: isPrimary
-                            ? const [Color(0xFF22324D), Color(0xFF334868)]
-                            : [
-                                activeBackground.withValues(alpha: 0.94),
-                                activeBackground.withValues(alpha: 0.84),
-                              ],
-                      )
-                    : null,
-                color: isSelected
-                    ? null
-                    : isPrimary
-                    ? (isDark
-                          ? const Color(0xFFE2BF85).withValues(alpha: 0.08)
-                          : const Color(0xFFC18B47).withValues(alpha: 0.08))
-                    : Colors.transparent,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isSelected
+                      ? const [Color(0xFFC18B47), Color(0xFFE2BF85)]
+                      : const [Color(0xFF22324B), Color(0xFF2D405D)],
+                ),
+                borderRadius: BorderRadius.circular(22.r),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFFF3DCB4)
+                      : const Color(0xFF435270),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF152238).withValues(alpha: 0.2),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    width: isSelected ? 30.w : 28.w,
-                    height: isSelected ? 30.w : 28.w,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isSelected
-                          ? Colors.white.withValues(alpha: 0.12)
-                          : isPrimary
-                          ? (isDark
-                                ? const Color(
-                                    0xFFE2BF85,
-                                  ).withValues(alpha: 0.12)
-                                : const Color(
-                                    0xFFC18B47,
-                                  ).withValues(alpha: 0.12))
-                          : Colors.transparent,
-                    ),
-                    child: Icon(
-                      isSelected ? activeIcon : icon,
-                      color: isSelected ? activeTextColor : inactiveIconColor,
-                      size: 19.sp,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.mic_rounded,
+                        color: isSelected
+                            ? const Color(0xFF22324B)
+                            : const Color(0xFFF1D5A5),
+                        size: 21.sp,
+                      ),
+                      SizedBox(width: 4.w),
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: isSelected
+                            ? const Color(0xFF22324B)
+                            : Colors.white,
+                        size: 18.sp,
+                      ),
+                    ],
                   ),
                   SizedBox(height: 5.h),
                   Text(
-                    label,
+                    'Voice & Chat',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: isSelected ? activeTextColor : inactiveTextColor,
-                      fontSize: 10.5.sp,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 3.h),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    width: isSelected ? 16.w : 4.w,
-                    height: 2.5.h,
-                    decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFFE2BF85)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(999.r),
+                          ? const Color(0xFF22324B)
+                          : Colors.white,
+                      fontSize: 10.5.sp,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
