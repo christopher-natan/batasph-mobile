@@ -1,46 +1,35 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:record/record.dart';
 import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class OnboardingController extends GetxController {
-  final pageController = PageController();
-  final currentPage = 0.obs;
+  final isContinuing = false.obs;
 
-  static const totalPages = 3;
-
-  bool get isLastPage => currentPage.value == totalPages - 1;
-
-  void nextPage() {
-    if (isLastPage) {
-      completeOnboarding();
-    } else {
-      pageController.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+  /// Asks for the microphone up front, since every answer starts with a call.
+  /// A denial is not a dead end: the call asks again when it starts.
+  Future<void> continueToApp() async {
+    if (isContinuing.value) return;
+    isContinuing.value = true;
+    try {
+      final recorder = AudioRecorder();
+      try {
+        final granted = await recorder.hasPermission();
+        BatasphLogger.log('[Onboarding] Mic permission: $granted');
+      } finally {
+        recorder.dispose();
+      }
+      BatasphLogger.log('[Onboarding] Complete');
+      await MySharedPref.setOnboardingComplete();
+      Get.offAllNamed(Routes.HOME);
+    } catch (e, st) {
+      BatasphLogger.error(
+        '[Onboarding] Continue failed',
+        error: e,
+        stackTrace: st,
       );
+      isContinuing.value = false;
     }
-  }
-
-  void skip() {
-    BatasphLogger.log('[Onboarding] Skipped at page ${currentPage.value}');
-    completeOnboarding();
-  }
-
-  void onPageChanged(int page) {
-    currentPage.value = page;
-  }
-
-  void completeOnboarding() {
-    BatasphLogger.log('[Onboarding] Complete');
-    MySharedPref.setOnboardingComplete();
-    Get.offAllNamed(Routes.MAIN_SHELL);
-  }
-
-  @override
-  void onClose() {
-    pageController.dispose();
-    super.onClose();
   }
 }

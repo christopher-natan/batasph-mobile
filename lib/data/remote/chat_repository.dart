@@ -1,8 +1,6 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
-import 'package:batasph_mobile/data/models/chat_greeting_model.dart';
-import 'package:batasph_mobile/data/models/chat_message_model.dart';
 import 'package:batasph_mobile/data/models/chat_source_model.dart';
 import 'package:batasph_mobile/data/models/chat_stream_event.dart';
 import 'package:batasph_mobile/data/remote/api_client.dart';
@@ -14,14 +12,10 @@ class ChatRepository {
     String text, {
     CancelToken? cancelToken,
     String? mode,
-    String? language,
     String? voice,
     List<String>? subjects,
   }) async* {
     final payload = <String, dynamic>{'text': text, 'mode': mode ?? 'text'};
-    if (language != null && language.isNotEmpty) {
-      payload['language'] = language;
-    }
     if (voice != null && voice.isNotEmpty) {
       payload['voice'] = voice;
     }
@@ -79,8 +73,6 @@ class ChatRepository {
       final json = jsonDecode(dataLines.join('\n')) as Map<String, dynamic>;
 
       switch (eventType) {
-        case 'userMessage':
-          return UserMessageEvent(ChatMessageModel.fromJson(json));
         case 'token':
           return TokenEvent(json['text'] as String? ?? '');
         case 'audio':
@@ -89,6 +81,7 @@ class ChatRepository {
           return AudioEvent(
             audio: base64Decode(audioBase64),
             index: json['index'] as int? ?? 0,
+            text: json['text'] as String? ?? '',
           );
         case 'done':
           final sourceList = json['sources'] as List? ?? const [];
@@ -124,46 +117,5 @@ class ChatRepository {
     } catch (_) {
       return null;
     }
-  }
-
-  Future<ChatGreetingModel> getGreeting({String? language}) async {
-    final response = await _client.get(
-      '/chat/greeting',
-      queryParameters: language != null && language.isNotEmpty
-          ? {'language': language}
-          : null,
-    );
-    return ChatGreetingModel.fromJson(response.data as Map<String, dynamic>);
-  }
-
-  Future<List<ChatMessageModel>> getHistory({
-    int? limit,
-    DateTime? before,
-  }) async {
-    final params = <String, dynamic>{};
-    if (limit != null) {
-      params['limit'] = limit;
-    }
-    if (before != null) {
-      params['before'] = before.toIso8601String();
-    }
-
-    final response = await _client.get(
-      '/chat/history',
-      queryParameters: params.isNotEmpty ? params : null,
-    );
-
-    final list = response.data as List;
-    return list
-        .map((json) => ChatMessageModel.fromJson(json as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<void> clearHistory() async {
-    await _client.delete('/chat/history');
-  }
-
-  Future<void> deleteMessages(List<String> messageIds) async {
-    await _client.delete('/chat/messages', data: {'ids': messageIds});
   }
 }

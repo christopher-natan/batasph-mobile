@@ -27,13 +27,11 @@ void main() {
 
   test('uses the chosen voice name and varies consecutive greetings', () async {
     final first = await service.prepare(
-      language: 'english',
       voice: 'luna',
       voiceName: 'Luna',
       tts: tts,
     );
     final second = await service.prepare(
-      language: 'english',
       voice: 'luna',
       voiceName: 'Luna',
       tts: tts,
@@ -47,17 +45,33 @@ void main() {
     expect(tts.synthesizedTexts, [first.text, second.text]);
   });
 
-  test('uses Filipino greeting copy when Tagalog is selected', () async {
-    final greeting = await service.prepare(
-      language: 'tagalog',
-      voice: 'aria',
-      voiceName: 'Aria',
-      tts: tts,
-    );
+  test('asks a first-time caller for their name', () async {
+    for (var i = 0; i < 3; i++) {
+      final greeting = await service.prepare(
+        voice: 'luna',
+        voiceName: 'Atty. Luna',
+        tts: tts,
+      );
+      expect(greeting.text, contains('Atty. Luna'));
+      expect(greeting.text, matches(RegExp('name|pangalan')));
+      expect(greeting.callerName, isNull);
+      expect(greeting.voice, 'luna');
+    }
+  });
 
-    expect(greeting.text, contains('Aria'));
-    expect(greeting.text, contains('BatasPH'));
-    expect(greeting.voice, 'aria');
+  test('asks a returning caller to confirm the saved name', () async {
+    for (var i = 0; i < 3; i++) {
+      final greeting = await service.prepare(
+        voice: 'luna',
+        voiceName: 'Atty. Luna',
+        tts: tts,
+        callerName: 'Chris',
+      );
+      expect(greeting.text, contains('Atty. Luna'));
+      expect(greeting.text, contains('Chris'));
+      expect(greeting.text, endsWith('?'));
+      expect(greeting.callerName, 'Chris');
+    }
   });
 
   test(
@@ -66,12 +80,7 @@ void main() {
       tts.failSynthesis = true;
 
       expect(
-        () => service.prepare(
-          language: 'english',
-          voice: 'luna',
-          voiceName: 'Luna',
-          tts: tts,
-        ),
+        () => service.prepare(voice: 'luna', voiceName: 'Luna', tts: tts),
         throwsStateError,
       );
     },
@@ -94,6 +103,9 @@ class _FakeTtsService implements TtsService {
 
   @override
   Future<void> playAudio(Uint8List audioBytes) async {}
+
+  @override
+  Future<void> setDucked(bool ducked) async {}
 
   @override
   Future<void> stop() async {}

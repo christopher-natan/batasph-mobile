@@ -19,7 +19,7 @@ class SplashController extends GetxController {
       return;
     }
 
-    BatasphLogger.log('[Splash] -> main shell');
-    Get.offAllNamed(Routes.MAIN_SHELL);
+    BatasphLogger.log('[Splash] -> home');
+    Get.offAllNamed(Routes.HOME);
   }
 }

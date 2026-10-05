@@ -7,7 +7,6 @@ class MyFonts {
   static TextStyle get displayTextStyle => _base;
   static TextStyle get bodyTextStyle => _base;
   static TextStyle get buttonTextStyle => _base;
-  static TextStyle get appBarTextStyle => _base;
   static TextStyle get chipTextStyle => _base;
 
   static double get appBarTittleSize => 20.sp;

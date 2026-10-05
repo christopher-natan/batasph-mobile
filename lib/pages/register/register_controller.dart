@@ -110,7 +110,7 @@ class RegisterController extends GetxController {
         'Your BatasPH account is now active on this device.',
         snackPosition: SnackPosition.BOTTOM,
       );
-      Get.offAllNamed(Routes.MAIN_SHELL);
+      Get.offAllNamed(Routes.HOME);
     } on GoogleSignInException catch (error) {
       // A user backing out of the account picker is not an error worth showing.
       if (!GoogleSignInErrorUtil.isCanceled(error)) {

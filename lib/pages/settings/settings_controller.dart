@@ -1,27 +1,12 @@
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:batasph_mobile/config/language/answer_language.dart';
-import 'package:batasph_mobile/config/theme/app_themes.dart';
-import 'package:batasph_mobile/config/theme/my_theme.dart';
-import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/data/models/user_model.dart';
-import 'package:batasph_mobile/pages/chat/chat_controller.dart';
-import 'package:batasph_mobile/pages/home/home_controller.dart';
 import 'package:batasph_mobile/routes/app_pages.dart';
-import 'package:batasph_mobile/services/answer_feedback_service.dart';
 import 'package:batasph_mobile/services/auth_service.dart';
-import 'package:batasph_mobile/services/saved_answers_service.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class SettingsController extends GetxController {
   final _authService = Get.find<AuthService>();
-  final _answerFeedbackService = Get.find<AnswerFeedbackService>();
-  final _savedAnswersService = Get.find<SavedAnswersService>();
-
-  final isDarkMode = (!MySharedPref.getThemeIsLight()).obs;
-  final currentThemeId = MySharedPref.getAppTheme().obs;
-  final answerLanguage = MySharedPref.getAnswerLanguage().obs;
 
   Rxn<UserModel> get currentUser => _authService.currentUser;
 
@@ -43,34 +28,6 @@ class SettingsController extends GetxController {
 
   String get accountInitials => currentUser.value?.initials ?? 'BT';
 
-  int get savedAnswersCount => _savedAnswersService.savedAnswers.length;
-  int get feedbackReportsCount => _answerFeedbackService.feedbackReports.length;
-
-  void toggleDarkMode(bool value) {
-    BatasphLogger.log('[Settings] Dark mode -> $value');
-    isDarkMode.value = value;
-    MySharedPref.setThemeIsLight(!value);
-    Get.changeThemeMode(value ? ThemeMode.dark : ThemeMode.light);
-  }
-
-  void changeAppTheme(AppThemeId themeId) {
-    BatasphLogger.log('[Settings] App theme -> ${themeId.name}');
-    currentThemeId.value = themeId.name;
-    MyTheme.changeAppTheme(themeId);
-  }
-
-  void changeAnswerLanguage(AnswerLanguage language) {
-    BatasphLogger.log('[Settings] Answer language -> ${language.name}');
-    answerLanguage.value = language;
-    MySharedPref.setAnswerLanguage(language);
-    if (Get.isRegistered<HomeController>()) {
-      Get.find<HomeController>().updateAnswerLanguage(language);
-    }
-    if (Get.isRegistered<ChatController>()) {
-      Get.find<ChatController>().updateAnswerLanguage(language);
-    }
-  }
-
   void openLogin() {
     Get.toNamed(Routes.LOGIN);
   }
@@ -89,14 +46,6 @@ class SettingsController extends GetxController {
 
   void openVoiceSettings() {
     Get.toNamed(Routes.VOICE_SETTINGS);
-  }
-
-  void openSavedAnswers() {
-    Get.toNamed(Routes.SAVED_ANSWERS);
-  }
-
-  void openFeedbackReports() {
-    Get.toNamed(Routes.FEEDBACK_REPORTS);
   }
 
   Future<void> logout() async {

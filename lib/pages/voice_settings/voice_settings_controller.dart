@@ -5,15 +5,7 @@ import 'package:batasph_mobile/utils/logger_util.dart';
 class VoiceSettingsController extends GetxController {
   static const int maxSpeechLanguages = 3;
 
-  final selectedVoice = Rx<String>(MySharedPref.getSelectedVoice());
   final speechLanguages = RxList<String>(MySharedPref.getSpeechLanguages());
-
-  static const voices = <Map<String, String>>[
-    {'id': 'luna', 'label': 'Luna', 'gender': 'female'},
-    {'id': 'aria', 'label': 'Aria', 'gender': 'female'},
-    {'id': 'atlas', 'label': 'Atlas', 'gender': 'male'},
-    {'id': 'orion', 'label': 'Orion', 'gender': 'male'},
-  ];
 
   static const supportedLanguages = <Map<String, String>>[
     {'code': 'en', 'label': 'English'},
@@ -24,12 +16,6 @@ class VoiceSettingsController extends GetxController {
     {'code': 'bcl', 'label': 'Bicolano'},
     {'code': 'war', 'label': 'Waray'},
   ];
-
-  Future<void> setSelectedVoice(String voiceId) async {
-    BatasphLogger.log('[Settings] Voice -> $voiceId');
-    selectedVoice.value = voiceId;
-    await MySharedPref.setSelectedVoice(voiceId);
-  }
 
   Future<void> toggleSpeechLanguage(String code) async {
     if (code == 'en') {

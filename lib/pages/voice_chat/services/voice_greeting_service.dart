@@ -10,60 +10,69 @@ class PreparedGreeting {
     required this.text,
     required this.audio,
     required this.voice,
+    required this.callerName,
   });
 
   final String text;
   final Uint8List audio;
   final String voice;
+
+  /// The saved name the greeting asks to confirm; null when it asks for the
+  /// caller's name instead.
+  final String? callerName;
 }
 
 /// Picks a short introduction for each call and caches its synthesized audio.
-/// The voice and language are part of the cache path, while the text hash
-/// keeps variants separate. A failed synthesis is reported to the call flow
+/// A first-time caller is asked their name; a returning one is asked to
+/// confirm the saved name. The voice is part of the cache path, while the
+/// text hash keeps variants (and names) separate. A failed synthesis is reported to the call flow
 /// so the call does not silently begin without its greeting.
 class VoiceGreetingService {
   VoiceGreetingService({SpokenClipCache? cache, Random? random})
     : _cache = cache ?? SpokenClipCache(),
       _random = random ?? Random();
 
-  static const String bucket = 'voice_greetings/v2';
-  static final Map<String, int> _lastVariantByLanguage = {};
+  /// Bump when the wording or the voice settings change, so cached audio is
+  /// not replayed.
+  static const String bucket = 'voice_greetings/v4';
+  static int? _lastVariant;
+
+  /// Taglish, like every answer. [voiceName] is the spoken name; with a
+  /// [callerName] the greeting asks whether it is them again.
+  static List<String> variantsFor(String voiceName, {String? callerName}) =>
+      callerName == null
+      ? [
+          'Hi, this is $voiceName. May I ask your name?',
+          'Hello! Si $voiceName ito ng BatasPH. Ano ang pangalan mo?',
+          'Hi there, $voiceName here! Before we start, may I ask your name?',
+        ]
+      : [
+          'Hi, this is $voiceName. Am I speaking with $callerName again?',
+          'Hello! Si $voiceName ito. Si $callerName ba ulit ito?',
+          'Hi, $voiceName here! Is this $callerName again?',
+        ];
 
   final SpokenClipCache _cache;
   final Random _random;
 
   Future<PreparedGreeting> prepare({
-    required String language,
     required String voice,
     required String voiceName,
     required TtsService tts,
+    String? callerName,
   }) async {
-    final isTagalog = language == 'tagalog';
-    final greetingLanguage = isTagalog ? 'tagalog' : 'english';
-    final variants = isTagalog
-        ? <String>[
-            'Kumusta! Ako si $voiceName, ang BatasPH AI legal assistant mo. Ano ang maitutulong ko?',
-            'Hello! Si $voiceName ito mula sa BatasPH. Ano ang tanong mo tungkol sa batas?',
-            'Maligayang pagdating sa BatasPH. Ako si $voiceName, ang AI legal assistant mo. Ano ang gusto mong malaman?',
-          ]
-        : <String>[
-            'Hello, this is $voiceName, your BatasPH AI legal assistant. How can I help?',
-            'Hi, I am $voiceName from BatasPH. What legal question can I help you with?',
-            'Welcome to BatasPH. I am $voiceName, your AI legal assistant. What would you like to ask?',
-          ];
-
-    final lastVariant = _lastVariantByLanguage[greetingLanguage];
+    final variants = variantsFor(voiceName, callerName: callerName);
     var variant = _random.nextInt(variants.length);
-    if (variant == lastVariant) {
+    if (variant == _lastVariant) {
       variant = (variant + 1) % variants.length;
     }
-    _lastVariantByLanguage[greetingLanguage] = variant;
+    _lastVariant = variant;
 
     final text = variants[variant];
     final audio = await _cache.getOrSynthesize(
       bucket: bucket,
       voice: voice,
-      key: '${greetingLanguage}_${_stableHash(text)}',
+      key: 'taglish_${_stableHash(text)}',
       text: text,
       tts: tts,
     );
@@ -72,10 +81,15 @@ class VoiceGreetingService {
     }
 
     BatasphLogger.log(
-      '[Voice] Greeting ready | language=$greetingLanguage | voice=$voice'
+      '[Voice] Greeting ready | voice=$voice'
       ' | variant=$variant | bytes=${audio.length} | "$text"',
     );
-    return PreparedGreeting(text: text, audio: audio, voice: voice);
+    return PreparedGreeting(
+      text: text,
+      audio: audio,
+      voice: voice,
+      callerName: callerName,
+    );
   }
 
   static String _stableHash(String value) {

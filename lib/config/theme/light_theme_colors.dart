@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:batasph_mobile/config/theme/app_themes.dart';
 
 class LightThemeColors {
-  static AppThemeColors get _c => AppThemes.getColors(isLight: true);
+  static const AppThemeColors _c = AppThemes.colors;
 
   static Color get primaryColor => _c.primaryColor;
   static Color get accentColor => _c.accentColor;

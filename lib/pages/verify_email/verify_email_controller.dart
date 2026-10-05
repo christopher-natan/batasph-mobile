@@ -71,7 +71,7 @@ class VerifyEmailController extends GetxController {
         'Your BatasPH account is now active on this device.',
         snackPosition: SnackPosition.BOTTOM,
       );
-      Get.offAllNamed(Routes.MAIN_SHELL);
+      Get.offAllNamed(Routes.HOME);
     } on DioException catch (error) {
       final message = ApiErrorUtil.message(
         error,

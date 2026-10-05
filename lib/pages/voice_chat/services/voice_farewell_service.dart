@@ -1,17 +1,28 @@
+/// The call's fixed spoken lines, in Taglish like every answer.
 class VoiceFarewellService {
-  static String silenceCheckIn({required String language}) {
-    return language == 'tagalog'
-        ? 'Hello, nandiyan ka pa ba? May iba ka pa bang tanong tungkol sa legal concern mo?'
-        : 'Hello, are you still there? Do you have another question about your legal concern?';
-  }
+  static const silenceCheckIn =
+      'Hello, nandiyan ka pa ba? May iba ka pa bang tanong about your legal concern?';
 
-  static String silenceFarewell({required String language}) {
-    return language == 'tagalog'
-        ? 'Mukhang wala ka na sa linya. Salamat sa pagtawag sa BatasPH. Maaari kang tumawag ulit anumang oras. Ingat, paalam!'
-        : 'It seems you are no longer on the line. Thank you for calling BatasPH. You can call again anytime. Take care, goodbye!';
-  }
+  static const silenceFarewell =
+      'Mukhang wala ka na sa linya. Thank you for calling BatasPH, pwede kang tumawag ulit anytime. Ingat, bye!';
 
-  static String? replyFor(String transcript, {required String language}) {
+  static const farewellReply = 'Thank you for calling BatasPH. Ingat ka, bye!';
+
+  /// Said about thirty seconds before the five-minute limit.
+  static const timeWarnings = [
+    'Pasensya na, may thirty seconds na lang tayo bago matapos ang call. May gusto ka pa bang linawin? Pero pwede ka namang tumawag ulit anytime.',
+    'Heads up, thirty seconds na lang ang natitira sa call natin. May gusto ka pa bang itanong? Tawag ka lang ulit kung kulang pa.',
+  ];
+
+  /// Said when the five minutes are up, then the call ends.
+  static const timeUpFarewells = [
+    'Ubos na ang oras natin for this call. Salamat sa pagtawag! Tawag ka lang ulit anytime. Ingat, bye!',
+    "That's our five minutes for now. Thank you for calling BatasPH, pwede kang tumawag ulit anytime. Ingat!",
+  ];
+
+  /// The goodbye to speak when [transcript] is the caller ending the call,
+  /// in English, Tagalog or Taglish; null for anything else.
+  static String? replyFor(String transcript) {
     final normalized = transcript
         .toLowerCase()
         .replaceAll(RegExp(r'[‘’]'), "'")
@@ -28,9 +39,6 @@ class VoiceFarewellService {
       r"(?:\s+(?:thank you|thanks|thank u|salamat)(?:\s+po)?)?$",
     ).hasMatch(normalized);
 
-    if (!isFarewell) return null;
-    return language == 'tagalog'
-        ? 'Salamat sa pagtawag sa BatasPH. Ingat, paalam!'
-        : 'Thank you for calling BatasPH. Take care, goodbye!';
+    return isFarewell ? farewellReply : null;
   }
 }

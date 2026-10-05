@@ -1,15 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:batasph_mobile/data/models/chat_source_model.dart';
-import 'package:batasph_mobile/data/models/chat_message_model.dart';
 
 sealed class ChatStreamEvent {}
-
-class UserMessageEvent extends ChatStreamEvent {
-  final ChatMessageModel message;
-
-  UserMessageEvent(this.message);
-}
 
 class TokenEvent extends ChatStreamEvent {
   final String text;
@@ -21,7 +14,10 @@ class AudioEvent extends ChatStreamEvent {
   final Uint8List audio;
   final int index;
 
-  AudioEvent({required this.audio, required this.index});
+  /// The sentence this chunk speaks, so captions can follow the voice.
+  final String text;
+
+  AudioEvent({required this.audio, required this.index, required this.text});
 }
 
 class DoneEvent extends ChatStreamEvent {

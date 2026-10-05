@@ -6,28 +6,51 @@ import 'package:dio/dio.dart' as dio;
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 
+import 'package:batasph_mobile/config/config.dart';
 import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/data/remote/api_client.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/realtime_socket_client.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/realtime_socket_client_factory.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/stt_service.dart';
+import 'package:batasph_mobile/pages/voice_chat/services/uplink_gate.dart';
+import 'package:batasph_mobile/pages/voice_chat/services/voice_audio_route.dart';
+import 'package:batasph_mobile/pages/voice_chat/services/voice_echo_probe.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
-/// Speech-to-text over the OpenAI Realtime transcription API, one socket and
-/// one recorder for the whole call.
+void _d(String msg) => BatasphLogger.debug('[STT] $msg');
+
+/// Speech-to-text over the OpenAI Realtime transcription API.
 ///
-/// The backend mints a short-lived client secret (`POST
-/// /realtime-transcription/session`); the phone streams PCM16 straight to
-/// OpenAI and the server VAD segments turns. After a final transcript the
-/// session stays up and the next utterance is simply the next segment, so
-/// listening resumes the instant a reply ends. While the assistant is itself
-/// producing sound the controller calls [setMuted]: the recorder keeps
-/// running but no audio is sent, so the assistant never transcribes its own
-/// voice. A long silence ([_idleTimeout]) closes the session and reports
-/// [onIdle]. An unexpected socket close is reconnected once, silently,
-/// before it becomes an error.
+/// Two lifecycles:
+///
+/// * Per utterance (`continuous: false`, the original): mint a secret,
+///   connect, stream the mic; the server VAD ends the turn, the final
+///   transcript arrives, the socket is torn down. Every turn pays the
+///   mint + connect (~0.5–1 s), during which the mic is not open.
+///
+/// * Continuous (`continuous: true`, 2026-09-18): one socket and one
+///   recorder for the whole conversation. After a final transcript the
+///   session stays up and the next utterance is simply the next segment,
+///   so listening resumes the instant a reply ends. While the assistant is
+///   itself producing sound the controller calls [setMuted]: the recorder
+///   keeps running but no audio is sent, so the assistant never transcribes
+///   its own voice and no audio is billed. A long silence ([_idleTimeout])
+///   closes the session and reports [onIdle]. An unexpected socket close is
+///   reconnected once, silently, before it becomes an error.
 class RealtimeSttService implements SttService {
+  RealtimeSttService({this.continuous = false});
+
+  /// See the class doc. The controller passes true; the Whisper fallback
+  /// path never constructs this class.
+  final bool continuous;
+
   static const int _sampleRate = 24000;
+  static const Duration _speechStartTimeout = Duration(seconds: 5);
+
+  /// How long listening waits on an empty room before closing the session.
+  /// BatasPH keeps 45s (Memori uses 10s for its tap-to-speak screen): a call
+  /// already asks "nandiyan ka pa ba?" after 10s of silence and says goodbye
+  /// 8s later, and must not lose its microphone underneath that.
   static const Duration _idleTimeout = Duration(seconds: 45);
   static const Duration _maxRecordingDuration = Duration(seconds: 45);
   static const Duration _minimumEndOfSpeechDelay = Duration(milliseconds: 700);
@@ -35,8 +58,8 @@ class RealtimeSttService implements SttService {
     milliseconds: 200,
   );
 
-  /// Minimum remaining lifetime for a client secret to be usable. Below this
-  /// a fresh one is minted rather than risk a mid-connect expiry.
+  /// Minimum remaining lifetime for a client secret to be usable.
+  /// If less than this remains, fetch a new one rather than risk a mid-connect expiry.
   static const Duration _tokenExpiryBuffer = Duration(seconds: 5);
 
   @visibleForTesting
@@ -59,6 +82,7 @@ class RealtimeSttService implements SttService {
   StreamSubscription<Uint8List>? _audioSubscription;
   StreamSubscription<Object?>? _socketSubscription;
   RealtimeSocketClient? _socket;
+  Timer? _speechStartWatchdog;
   Timer? _idleTimer;
   Timer? _maxRecordingTimer;
 
@@ -72,15 +96,27 @@ class RealtimeSttService implements SttService {
   SttSpeechStartedCallback? onSpeechStarted;
   @override
   SttIdleCallback? onIdle;
+  @override
+  SttAudioLevelCallback? onAudioLevel;
 
   bool _isActive = false;
   bool _muted = false;
   bool _awaitingFinalTranscript = false;
+  bool _finalResultEmitted = false;
+  bool _hasDetectedSpeech = false;
   bool _expectedSocketClose = false;
   bool _reconnecting = false;
   int _sessionId = 0;
   int _chunksSent = 0;
   int _chunksDropped = 0;
+
+  /// Frames actually uplinked since the last mute change. Tells the
+  /// difference between 'the mic was open' and 'the mic was open and we
+  /// paid for it'.
+  int _framesSentThisTurn = 0;
+  int _framesHeldThisTurn = 0;
+  final _uplinkGate = UplinkGate();
+  bool _gated = false;
   String _partialTranscript = '';
   String? _activeItemId;
   String? _lastCompletedItemId;
@@ -89,24 +125,34 @@ class RealtimeSttService implements SttService {
   bool get isActive => _isActive;
 
   @override
-  bool get supportsContinuousListening => true;
+  bool get supportsContinuousListening => continuous;
 
   @override
-  void setMuted(bool muted) {
+  void setMuted(bool muted, {bool preserveBuffer = false}) {
     if (_muted == muted) return;
     _muted = muted;
-    BatasphLogger.debug('[STT] setMuted($muted) | active=$_isActive');
-    if (!_isActive) return;
+    _d(
+      'RealtimeSTT.setMuted($muted, preserveBuffer: $preserveBuffer) | isActive=$_isActive',
+    );
+    BatasphLogger.log(
+      '[BARGE] mic ${muted ? 'closed' : 'OPEN'} '
+      '${preserveBuffer ? '(buffer kept)' : '(buffer cleared)'} '
+      'uplinked=$_framesSentThisTurn frames since last change',
+    );
+    _framesSentThisTurn = 0;
+    if (!continuous || !_isActive) return;
     // The idle clock only runs while the user could actually be heard.
     if (muted) {
       _cancelIdleTimer();
-      // Drop whatever uncommitted audio the server still holds, so a
-      // half-sentence cut off by the mute is not glued onto the next one
-      // when we unmute.
-      _socket?.sendText(jsonEncode({'type': 'input_audio_buffer.clear'}));
-      _awaitingFinalTranscript = false;
-      _partialTranscript = '';
-      _activeItemId = null;
+      if (!preserveBuffer) {
+        // Drop whatever uncommitted audio the server still holds, so a
+        // half-sentence cut off by the mute is not glued onto the next one
+        // when we unmute.
+        _socket?.sendText(jsonEncode({'type': 'input_audio_buffer.clear'}));
+        _awaitingFinalTranscript = false;
+        _partialTranscript = '';
+        _activeItemId = null;
+      }
     } else {
       _armIdleTimer(_sessionId);
     }
@@ -117,23 +163,25 @@ class RealtimeSttService implements SttService {
 
   @override
   Future<void> startSession() async {
+    _d('RealtimeSTT.startSession() called | isActive=$_isActive');
     if (_isActive) {
+      _d('RealtimeSTT.startSession() already active, returning');
       return;
     }
 
     final sessionId = ++_sessionId;
     _isActive = true;
-    // `_muted` is deliberately NOT reset: a caller opening the session
-    // while its own audio plays pre-mutes so the recorder's first chunks
-    // are dropped rather than sent. Teardown resets it.
+    _muted = false;
     _awaitingFinalTranscript = false;
+    _finalResultEmitted = false;
+    _hasDetectedSpeech = false;
     _expectedSocketClose = false;
     _partialTranscript = '';
     _activeItemId = null;
     _lastCompletedItemId = null;
+    _cancelSpeechStartWatchdog();
     _cancelIdleTimer();
     _cancelMaxRecordingTimer();
-    final stopwatch = Stopwatch()..start();
 
     try {
       final socket = await _connect(sessionId);
@@ -142,23 +190,33 @@ class RealtimeSttService implements SttService {
       final recorder = AudioRecorder();
       _recorder = recorder;
       final stream = await recorder.startStream(
-        const RecordConfig(
+        RecordConfig(
           encoder: AudioEncoder.pcm16bits,
           sampleRate: _sampleRate,
           numChannels: 1,
           // The phone is typically at arm's length, not at the mouth: let
-          // the platform AGC lift quiet input before it reaches the VAD.
+          // the platform AGC lift quiet input before it reaches the VAD
+          // (2026-09-18: speech at ~1 ft was barely picked up without it).
           autoGain: true,
-          // The mic stays open while the thinking loop plays: let the
-          // platform cancel what the speaker feeds back into the mic.
+          // The mic now stays open while the assistant plays its thinking
+          // loop (continuous mode): let the platform cancel what the
+          // speaker feeds back into the mic.
           echoCancel: true,
-          // The mic must never be paused by audio focus. The default (pause)
-          // makes the recorder pause the moment the reply TTS takes focus
-          // and it only resumes on a GAIN that never comes.
+          // Continuous conversation: the mic must never be paused by audio
+          // focus. The default (pause) makes the recorder request focus and
+          // pause on loss — which happens the moment the reply TTS starts —
+          // and it only resumes on a GAIN that never comes, so every turn
+          // after the first reply heard nothing (2026-09-18). With none the
+          // recorder does not take part in focus at all.
           audioInterruption: AudioInterruptionMode.none,
+          // The capture half of the audio route. Its Android globals are
+          // shared with the reply player — see VoiceAudioRoute for why the
+          // two must not be set independently.
+          androidConfig: VoiceAudioRoute.recordConfig(),
         ),
       );
       if (sessionId != _sessionId) {
+        _d('RealtimeSTT.startSession() cancelled during recorder start');
         await recorder.stop();
         recorder.dispose();
         return;
@@ -167,45 +225,70 @@ class RealtimeSttService implements SttService {
       _audioSubscription = stream.listen(
         (chunk) {
           if (!_isActive) return;
-          if (_muted) {
-            if (++_chunksDropped % 200 == 0) {
-              BatasphLogger.debug(
-                '[STT] mic: $_chunksDropped chunks dropped (muted)',
-              );
+          // Before the mute check on purpose: a muted frame is still a
+          // measurement of what the microphone hears while we speak, and it
+          // costs nothing because the frame is not sent.
+          final dbfs = _reportAudioLevel(chunk);
+          if (continuous ? _muted : _awaitingFinalTranscript) {
+            if (++_chunksDropped % 100 == 0) {
+              _d('RealtimeSTT mic: $_chunksDropped chunks dropped (muted)');
             }
             return;
           }
-          if (++_chunksSent % 200 == 0) {
-            BatasphLogger.debug('[STT] mic: $_chunksSent chunks sent');
+          if (_gated) {
+            final wasOpen = _uplinkGate.isOpen;
+            final toSend = _uplinkGate.offer(chunk, dbfs);
+            if (toSend.isEmpty) {
+              if (wasOpen && _uplinkGate.lastCloseWasForced) {
+                BatasphLogger.log(
+                  '[BARGE] uplink forced shut — the room stayed above its own '
+                  'threshold, re-measuring',
+                );
+              }
+              _framesHeldThisTurn++;
+              return;
+            }
+            if (!wasOpen) {
+              BatasphLogger.log(
+                '[BARGE] uplink opened | level=${dbfs.toStringAsFixed(1)}dBFS '
+                'floor=${_uplinkGate.floorDbfs.toStringAsFixed(1)}dBFS '
+                'held=$_framesHeldThisTurn frames, ${toSend.length} flushed',
+              );
+            }
+            for (final frame in toSend) {
+              _sendFrame(frame);
+            }
+            return;
           }
-          _socket?.sendText(
-            jsonEncode({
-              'type': 'input_audio_buffer.append',
-              'audio': base64Encode(chunk),
-            }),
-          );
+          _sendFrame(chunk);
         },
         onError: (Object error) {
           _handleSocketError(sessionId, 'Microphone stream failed: $error');
         },
       );
 
-      final silenceSeconds = MySharedPref.getVoiceSilenceSeconds();
+      final silenceSeconds = AppConfig.voiceSilenceSeconds;
+      final silenceDurationMs = resolveSilenceDurationMs(silenceSeconds);
       BatasphLogger.log(
-        '[STT] Realtime session open | session=$sessionId'
-        ' | ${stopwatch.elapsedMilliseconds}ms'
-        ' | sampleRate=${_sampleRate}Hz'
-        ' | silence=${resolveSilenceDurationMs(silenceSeconds)}ms',
+        '[STT] Streaming started '
+        'sampleRate=${_sampleRate}Hz silence=${silenceDurationMs}ms '
+        'continuous=$continuous',
       );
-      _armIdleTimer(sessionId);
-    } catch (error, stackTrace) {
-      BatasphLogger.error(
-        '[STT] Failed to start realtime session | session=$sessionId'
-        ' | ${stopwatch.elapsedMilliseconds}ms',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      await _teardown();
+      // What the route actually resolved to. Read this before trusting any
+      // echo figure below it: a leak measured while the route failed to
+      // apply says nothing about whether the route works.
+      BatasphLogger.log('[BARGE] route ${VoiceAudioRoute.describe()}');
+
+      if (continuous) {
+        _armIdleTimer(sessionId);
+      } else {
+        _armSpeechStartWatchdog(sessionId);
+        _armMaxRecordingTimer(sessionId);
+      }
+    } catch (e) {
+      _d('RealtimeSTT.startSession() FAILED: $e');
+      BatasphLogger.error('[STT] Failed to start session: $e');
+      await _teardown(incrementSession: false);
       onError?.call('Failed to start realtime voice chat');
     }
   }
@@ -218,13 +301,14 @@ class RealtimeSttService implements SttService {
     if (sessionId != _sessionId) return null;
 
     if (_isTokenExpired(sessionInfo)) {
-      throw StateError('Client secret expired before WebSocket connect');
+      throw Exception('Client secret expired before WebSocket connect');
     }
 
     final socket = createRealtimeSocketClient();
     _socket = socket;
-    BatasphLogger.debug(
-      '[STT] Connecting ${sessionInfo.url} | expiresAt=${sessionInfo.expiresAt}',
+    _d(
+      'RealtimeSTT connecting to ${sessionInfo.url} '
+      'expiresAt=${sessionInfo.expiresAt}',
     );
     await socket.connect(
       sessionInfo.url,
@@ -233,6 +317,7 @@ class RealtimeSttService implements SttService {
     if (sessionId != _sessionId) {
       // Teardown already ran while we were connecting; the socket it
       // closed was not yet open, so this one is ours to close.
+      _d('RealtimeSTT cancelled during connect');
       await socket.close();
       return null;
     }
@@ -251,25 +336,29 @@ class RealtimeSttService implements SttService {
 
   @override
   Future<void> stopSession() async {
+    _d(
+      'RealtimeSTT.stopSession() called | '
+      'isActive=$_isActive awaitingFinal=$_awaitingFinalTranscript',
+    );
     if (!_isActive || _awaitingFinalTranscript) {
       return;
     }
 
     _awaitingFinalTranscript = true;
+    _cancelSpeechStartWatchdog();
     _cancelMaxRecordingTimer();
+    if (!continuous) {
+      await _stopStreamingAudio();
+    }
     onTranscribing?.call();
     _socket?.sendText(jsonEncode({'type': 'input_audio_buffer.commit'}));
   }
 
   @override
   Future<void> cancelSession() async {
-    if (_isActive) {
-      BatasphLogger.log(
-        '[STT] Realtime session cancelled | session=$_sessionId',
-      );
-    }
+    _d('RealtimeSTT.cancelSession() called | isActive=$_isActive');
     _sessionId++;
-    await _teardown();
+    await _teardown(incrementSession: false);
   }
 
   void _handleSocketMessage(int sessionId, Object? message) {
@@ -286,24 +375,32 @@ class RealtimeSttService implements SttService {
     }
 
     final type = payload['type'] as String?;
+    if (type != 'conversation.item.input_audio_transcription.delta') {
+      _d('RealtimeSTT ← $type');
+    }
     switch (type) {
       case 'input_audio_buffer.speech_started':
-        BatasphLogger.log('[STT] Speech started | session=$sessionId');
-        _cancelIdleTimer();
-        _armMaxRecordingTimer(sessionId);
+        _hasDetectedSpeech = true;
+        _cancelSpeechStartWatchdog();
+        if (continuous) {
+          _cancelIdleTimer();
+          _armMaxRecordingTimer(sessionId);
+        }
         onSpeechStarted?.call();
+        break;
       case 'input_audio_buffer.speech_stopped':
-        BatasphLogger.log('[STT] Speech stopped | session=$sessionId');
-        _handleSpeechStopped(sessionId);
+        unawaited(_handleSpeechStopped(sessionId));
+        break;
       case 'conversation.item.input_audio_transcription.delta':
         _handleTranscriptDelta(payload);
+        break;
       case 'conversation.item.input_audio_transcription.completed':
-        _handleTranscriptCompleted(sessionId, payload);
+        unawaited(_handleTranscriptCompleted(sessionId, payload));
+        break;
       case 'conversation.item.input_audio_transcription.failed':
       case 'error':
         _handleSocketError(sessionId, _extractRealtimeErrorMessage(payload));
-      default:
-        BatasphLogger.debug('[STT] <- $type');
+        break;
     }
   }
 
@@ -323,42 +420,60 @@ class RealtimeSttService implements SttService {
     onResult?.call(_partialTranscript.trim(), false);
   }
 
-  void _handleTranscriptCompleted(int sessionId, Map<String, dynamic> payload) {
+  Future<void> _handleTranscriptCompleted(
+    int sessionId,
+    Map<String, dynamic> payload,
+  ) async {
     if (sessionId != _sessionId) return;
 
     final transcript = (payload['transcript'] as String? ?? '').trim();
 
-    // One final per item, then the session simply carries on.
+    if (!continuous) {
+      if (_finalResultEmitted) return;
+      _finalResultEmitted = true;
+      BatasphLogger.log('[STT] Final transcript: $transcript');
+      onResult?.call(transcript, true);
+      await _teardown(incrementSession: true);
+      return;
+    }
+
+    // Continuous: one final per item, then the session simply carries on.
     final itemId = payload['item_id'] as String?;
     if (itemId != null && itemId == _lastCompletedItemId) return;
     _lastCompletedItemId = itemId;
     _awaitingFinalTranscript = false;
     _partialTranscript = '';
     _activeItemId = null;
+    _hasDetectedSpeech = false;
     _cancelMaxRecordingTimer();
     if (!_muted) _armIdleTimer(sessionId);
-    BatasphLogger.log(
-      '[STT] Final transcript | session=$sessionId | chars=${transcript.length}',
-    );
+    BatasphLogger.log('[STT] Final transcript: $transcript');
     onResult?.call(transcript, true);
   }
 
-  void _handleSpeechStopped(int sessionId) {
+  Future<void> _handleSpeechStopped(int sessionId) async {
     if (sessionId != _sessionId || _awaitingFinalTranscript) {
       return;
     }
 
     _awaitingFinalTranscript = true;
     _cancelMaxRecordingTimer();
+    if (!continuous) {
+      // Per-utterance: nothing more is wanted from the mic this turn.
+      await _stopStreamingAudio();
+    }
     onTranscribing?.call();
   }
 
   void _handleSocketDone(int sessionId) {
+    _d(
+      'RealtimeSTT socket closed | session=$sessionId current=$_sessionId expected=$_expectedSocketClose active=$_isActive',
+    );
     if (sessionId != _sessionId || _expectedSocketClose) {
       return;
     }
 
-    if (_isActive && !_reconnecting) {
+    if (continuous && _isActive && !_reconnecting) {
       unawaited(_reconnect(sessionId));
       return;
     }
@@ -373,9 +488,7 @@ class RealtimeSttService implements SttService {
   /// recorder running; if that fails it is a real error.
   Future<void> _reconnect(int sessionId) async {
     _reconnecting = true;
-    BatasphLogger.warning(
-      '[STT] Socket closed mid-call, reconnecting | session=$sessionId',
-    );
+    BatasphLogger.log('[STT] Socket closed mid-conversation, reconnecting');
     // An utterance whose final transcript was still pending is lost with the
     // old socket; the controller is told so with an empty final, which it
     // treats as "back to listening" instead of waiting forever.
@@ -389,16 +502,11 @@ class RealtimeSttService implements SttService {
       _activeItemId = null;
       final socket = await _connect(sessionId);
       if (socket == null) return; // cancelled meanwhile
-      BatasphLogger.log('[STT] Reconnected | session=$sessionId');
+      BatasphLogger.log('[STT] Reconnected');
       if (!_muted) _armIdleTimer(sessionId);
       if (lostPendingTranscript) onResult?.call('', true);
-    } catch (error, stackTrace) {
-      BatasphLogger.error(
-        '[STT] Reconnect failed | session=$sessionId',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      _handleSocketError(sessionId, 'Realtime transcription disconnected');
+    } catch (e) {
+      _handleSocketError(sessionId, 'Realtime transcription disconnected: $e');
     } finally {
       _reconnecting = false;
     }
@@ -409,9 +517,9 @@ class RealtimeSttService implements SttService {
       return;
     }
 
-    BatasphLogger.error('[STT] $message | session=$sessionId');
+    BatasphLogger.error('[STT] $message');
     _sessionId++;
-    unawaited(_teardown());
+    unawaited(_teardown(incrementSession: false));
     onError?.call(message);
   }
 
@@ -435,7 +543,7 @@ class RealtimeSttService implements SttService {
   Future<_RealtimeSessionInfo> _createRealtimeSessionInfo() async {
     final languages = MySharedPref.getSpeechLanguages();
     final silenceDurationMs = resolveSilenceDurationMs(
-      MySharedPref.getVoiceSilenceSeconds(),
+      AppConfig.voiceSilenceSeconds,
     );
     final response = await ApiClient().client.post(
       '/realtime-transcription/session',
@@ -445,23 +553,60 @@ class RealtimeSttService implements SttService {
     return _RealtimeSessionInfo.fromJson(response.data as Map<String, dynamic>);
   }
 
+  void _sendFrame(Uint8List frame) {
+    if (++_chunksSent % 100 == 0) {
+      _d(
+        'RealtimeSTT mic: $_chunksSent chunks sent | socket=${_socket != null} muted=$_muted',
+      );
+    }
+    _framesSentThisTurn++;
+    _socket?.sendText(
+      jsonEncode({
+        'type': 'input_audio_buffer.append',
+        'audio': base64Encode(frame),
+      }),
+    );
+  }
+
+  double _reportAudioLevel(Uint8List chunk) {
+    final dbfs = VoiceEchoProbe.rmsDbfs(chunk);
+    onAudioLevel?.call(dbfs);
+    return dbfs;
+  }
+
+  @override
+  void setUplinkGate(bool gated) {
+    if (_gated == gated) return;
+    _gated = gated;
+    if (gated) {
+      _framesHeldThisTurn = 0;
+      _uplinkGate.reset();
+    } else if (_framesHeldThisTurn > 0) {
+      BatasphLogger.log(
+        '[BARGE] uplink ungated | $_framesHeldThisTurn frames were held back',
+      );
+    }
+  }
+
   Future<void> _stopStreamingAudio() async {
+    _cancelSpeechStartWatchdog();
     await _audioSubscription?.cancel();
     _audioSubscription = null;
 
     try {
       await _recorder?.stop();
-    } catch (error) {
-      BatasphLogger.debug('[STT] recorder.stop threw during teardown: $error');
+    } catch (e) {
+      _d('RealtimeSTT recorder.stop threw during teardown (ignored): $e');
     }
     _recorder?.dispose();
     _recorder = null;
   }
 
-  Future<void> _teardown() async {
+  Future<void> _teardown({required bool incrementSession}) async {
     _isActive = false;
     _muted = false;
     _awaitingFinalTranscript = false;
+    _cancelSpeechStartWatchdog();
     _cancelIdleTimer();
     _cancelMaxRecordingTimer();
     await _stopStreamingAudio();
@@ -473,10 +618,33 @@ class RealtimeSttService implements SttService {
     _partialTranscript = '';
     _activeItemId = null;
     _lastCompletedItemId = null;
+    _hasDetectedSpeech = false;
+    _finalResultEmitted = false;
+    if (incrementSession) {
+      _sessionId++;
+    }
   }
 
-  /// A long silence while unmuted closes the session so a forgotten phone
-  /// does not stream (and pay) indefinitely.
+  void _armSpeechStartWatchdog(int sessionId) {
+    _cancelSpeechStartWatchdog();
+    _speechStartWatchdog = Timer(_speechStartTimeout, () async {
+      if (!_isActive || sessionId != _sessionId || _hasDetectedSpeech) {
+        return;
+      }
+
+      BatasphLogger.log('[STT] Speech-start watchdog fired');
+      await cancelSession();
+      onResult?.call('', true);
+    });
+  }
+
+  void _cancelSpeechStartWatchdog() {
+    _speechStartWatchdog?.cancel();
+    _speechStartWatchdog = null;
+  }
+
+  /// Continuous mode: a long silence while unmuted closes the session so a
+  /// forgotten phone does not stream (and pay) indefinitely.
   void _armIdleTimer(int sessionId) {
     _cancelIdleTimer();
     _idleTimer = Timer(_idleTimeout, () async {
@@ -484,8 +652,7 @@ class RealtimeSttService implements SttService {
         return;
       }
       BatasphLogger.log(
-        '[STT] Idle for ${_idleTimeout.inSeconds}s, closing session'
-        ' | session=$sessionId',
+        '[STT] Idle for ${_idleTimeout.inSeconds}s, closing session',
       );
       await cancelSession();
       onIdle?.call();
@@ -503,12 +670,14 @@ class RealtimeSttService implements SttService {
       if (!_isActive || sessionId != _sessionId) {
         return;
       }
-      BatasphLogger.log(
-        '[STT] Max recording ${_maxRecordingDuration.inSeconds}s reached,'
-        ' forcing segment | session=$sessionId',
-      );
-      // Force the server to segment a monologue; the session carries on.
-      _socket?.sendText(jsonEncode({'type': 'input_audio_buffer.commit'}));
+
+      BatasphLogger.log('[STT] Max recording duration reached');
+      if (continuous) {
+        // Force the server to segment a monologue; the session carries on.
+        _socket?.sendText(jsonEncode({'type': 'input_audio_buffer.commit'}));
+      } else {
+        unawaited(stopSession());
+      }
     });
   }
 
@@ -519,13 +688,15 @@ class RealtimeSttService implements SttService {
 
   @override
   Future<void> dispose() async {
+    _d('RealtimeSTT.dispose() called');
     _sessionId++;
-    await _teardown();
+    await _teardown(incrementSession: false);
     onResult = null;
     onError = null;
     onTranscribing = null;
     onSpeechStarted = null;
     onIdle = null;
+    onAudioLevel = null;
   }
 }
 

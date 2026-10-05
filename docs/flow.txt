@@ -1,9 +1,0 @@
-The idea came from the Memori app D:\PROJECTS\vxtory.com.2026\memori, but this app will take a different direction. It will support both voice calls and text chat, so users can interact with an AI attorney just like calling or texting someone on a mobile phone.
-
-The AI attorney may begin with a natural greeting, such as: “This is Attorney Batas. How can I help you with your legal concern?”
-
-The conversation will then continue, with the AI providing legal information, possible remedies, and general guidance.
-
-For Philippine law, we will collect information from reliable and relevant legal sources and store it in our vector database. These Philippine legal sources will be the AI’s main source of information. If the required information is unavailable, the app may use ChatGPT’s general knowledge as a secondary source.
-
-The more reliable legal data we add, the more useful and knowledgeable the AI attorney will become. That is the basic flow.

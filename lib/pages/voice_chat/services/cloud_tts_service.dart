@@ -3,9 +3,11 @@ import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart' as dio;
-import 'package:batasph_mobile/data/local/my_shared_pref.dart';
+import 'package:batasph_mobile/config/config.dart';
 import 'package:batasph_mobile/data/remote/api_client.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/tts_service.dart';
+import 'package:batasph_mobile/pages/voice_chat/services/voice_audio_route.dart';
+import 'package:batasph_mobile/pages/voice_chat/services/voice_barge_in_mode.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
 class CloudTtsService implements TtsService {
@@ -13,14 +15,36 @@ class CloudTtsService implements TtsService {
   Completer<void>? _playCompleter;
   bool _stopped = false;
 
-  AudioPlayer _getPlayer() {
-    if (_player == null) {
-      _player = AudioPlayer();
-      _player!.onPlayerComplete.listen((_) {
-        _completePlay();
-      });
+  Future<AudioPlayer> _getPlayer() async {
+    final existing = _player;
+    if (existing != null) return existing;
+
+    final player = AudioPlayer();
+    player.onPlayerComplete.listen((_) {
+      _completePlay();
+    });
+
+    // Before the first source is set: setAudioContext stops and resets the
+    // player, so it can never be applied mid-turn. Null when barge-in is off,
+    // deliberately — setting a context writes Android's global audio mode.
+    final context = VoiceAudioRoute.playerContext();
+    if (context != null) {
+      BatasphLogger.log('[TTS] Applying voice-communication audio route');
+      try {
+        await player.setAudioContext(context);
+      } catch (error, stackTrace) {
+        // A route we cannot set is not a reason to lose the voice; echo
+        // cancellation just will not have our playback as its reference.
+        BatasphLogger.error(
+          '[TTS] Could not set the audio route',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
-    return _player!;
+
+    _player = player;
+    return player;
   }
 
   @override
@@ -30,7 +54,7 @@ class CloudTtsService implements TtsService {
       throw StateError('Cannot synthesize empty text');
     }
 
-    final voice = MySharedPref.getSelectedVoice();
+    const voice = AppConfig.personaVoice;
     final stopwatch = Stopwatch()..start();
     BatasphLogger.log(
       '[TTS] Synthesize | voice=$voice | chars=${trimmed.length}',
@@ -70,7 +94,8 @@ class CloudTtsService implements TtsService {
       _playCompleter = completer;
 
       BatasphLogger.debug('[TTS] Play | bytes=${audioBytes.length}');
-      await _getPlayer().play(BytesSource(audioBytes, mimeType: 'audio/mpeg'));
+      final player = await _getPlayer();
+      await player.play(BytesSource(audioBytes, mimeType: 'audio/mpeg'));
       await completer.future;
       BatasphLogger.debug(
         '[TTS] Play ${_stopped ? 'stopped' : 'complete'}'
@@ -100,9 +125,39 @@ class CloudTtsService implements TtsService {
     await playAudio(audioBytes);
   }
 
+  static const _rampSteps = 5;
+  bool _ducked = false;
+
+  @override
+  Future<void> setDucked(bool ducked) async {
+    if (_ducked == ducked) return;
+    _ducked = ducked;
+    BatasphLogger.debug('[TTS] setDucked($ducked)');
+
+    final from = ducked ? 1.0 : VoiceBargeIn.duckedVolume;
+    final to = ducked ? VoiceBargeIn.duckedVolume : 1.0;
+    final step =
+        (ducked
+            ? VoiceBargeIn.duckDownDuration
+            : VoiceBargeIn.duckUpDuration) ~/
+        _rampSteps;
+
+    try {
+      for (var i = 1; i <= _rampSteps; i++) {
+        // A newer call, or a stop, owns the volume now.
+        if (_ducked != ducked || _stopped) return;
+        await _player?.setVolume(from + (to - from) * (i / _rampSteps));
+        if (i < _rampSteps) await Future<void>.delayed(step);
+      }
+    } catch (error) {
+      BatasphLogger.debug('[TTS] setDucked ignored: $error');
+    }
+  }
+
   @override
   Future<void> stop() async {
     _stopped = true;
+    _ducked = false;
 
     try {
       if (_player != null &&

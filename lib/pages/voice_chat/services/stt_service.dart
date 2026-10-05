@@ -3,6 +3,7 @@ typedef SttErrorCallback = void Function(String error);
 typedef SttTranscribingCallback = void Function();
 typedef SttSpeechStartedCallback = void Function();
 typedef SttIdleCallback = void Function();
+typedef SttAudioLevelCallback = void Function(double dbfs);
 
 abstract class SttService {
   SttResultCallback? onResult;
@@ -20,6 +21,11 @@ abstract class SttService {
   /// The service has already torn down; the controller only updates state.
   SttIdleCallback? onIdle;
 
+  /// Fired for every captured frame with its RMS level in dBFS, whether or
+  /// not the frame was sent. Muted frames count too — that is what makes the
+  /// echo measurement free (see VoiceEchoProbe).
+  SttAudioLevelCallback? onAudioLevel;
+
   bool get isActive;
 
   /// True when one session spans the whole call (listen → process → speak →
@@ -29,7 +35,17 @@ abstract class SttService {
 
   /// Continuous services stop sending microphone audio while muted (the
   /// recorder keeps running so unmuting is instant). No-op elsewhere.
-  void setMuted(bool muted) {}
+  ///
+  /// Muting normally drops the audio the server still holds, so a
+  /// half-sentence cut off by the mute is not glued onto the next turn. Pass
+  /// [preserveBuffer] when that audio is wanted — during a barge-in the words
+  /// spoken over the reply ARE the next turn.
+  void setMuted(bool muted, {bool preserveBuffer = false}) {}
+
+  /// While gated, captured audio is held back until someone actually speaks
+  /// instead of being uplinked continuously. Used only for the assistant's
+  /// own turn, where the mic stays open for barge-in; never gate the user's.
+  void setUplinkGate(bool gated) {}
 
   /// Pre-warm expensive resources so startSession() is fast.
   Future<void> warmUp();

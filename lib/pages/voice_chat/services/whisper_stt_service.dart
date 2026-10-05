@@ -9,13 +9,21 @@ import 'package:record/record.dart';
 
 import 'dart:convert';
 
+import 'package:batasph_mobile/config/config.dart';
 import 'package:batasph_mobile/data/local/my_shared_pref.dart';
 import 'package:batasph_mobile/data/remote/api_client.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/stt_service.dart';
 import 'package:batasph_mobile/pages/voice_chat/services/whisper_turn_detector.dart';
 import 'package:batasph_mobile/utils/logger_util.dart';
 
-class WhisperSttService extends SttService {
+void _d(String msg) => BatasphLogger.debug('[STT] $msg');
+
+/// Speech-to-text using OpenAI Whisper via the backend `/transcribe` endpoint.
+///
+/// Records audio to a temp file, monitors amplitude for silence detection,
+/// then sends the file to the backend for Whisper transcription.
+/// Best for multi-language / code-switching (e.g. Taglish).
+class WhisperSttService implements SttService {
   static const double _silenceThresholdDb = -45.0;
   static const int _sampleRate = 16000;
   static const int _bitRate = 32000;
@@ -59,41 +67,62 @@ class WhisperSttService extends SttService {
   Timer? _speechStartWatchdog;
   Timer? _maxRecordingTimer;
 
+  @override
+  SttResultCallback? onResult;
+  @override
+  SttErrorCallback? onError;
+  @override
+  SttTranscribingCallback? onTranscribing;
+  @override
+  SttSpeechStartedCallback? onSpeechStarted;
+  @override
+  SttIdleCallback? onIdle;
+
+  /// The fallback path does not meter: it only runs when realtime STT has
+  /// already failed, and the echo measurement is about the continuous session.
+  @override
+  SttAudioLevelCallback? onAudioLevel;
+
+  // One recording per utterance; nothing to mute between turns.
+  @override
+  bool get supportsContinuousListening => false;
+  @override
+  void setMuted(bool muted, {bool preserveBuffer = false}) {}
+
+  /// The fallback records one utterance at a time and never runs during the
+  /// assistant's turn, so there is nothing to gate.
+  @override
+  void setUplinkGate(bool gated) {}
+
   bool _isActive = false;
   int _sessionId = 0;
-  Stopwatch? _sessionStopwatch;
-
   @override
   bool get isActive => _isActive;
 
   @override
-  Future<void> warmUp() async {}
+  Future<void> warmUp() async {
+    // No pre-warming needed — Whisper uses the backend directly.
+  }
 
   @override
   Future<void> startSession() async {
+    _d('WhisperSTT.startSession() called | isActive=$_isActive');
     if (_isActive) {
+      _d('WhisperSTT.startSession() already active, returning');
       return;
     }
-
     _isActive = true;
     final sessionId = ++_sessionId;
-    _sessionStopwatch = Stopwatch()..start();
     _cancelSpeechStartWatchdog();
 
     try {
-      final hasPermission = await AudioRecorder().hasPermission();
-      if (!hasPermission) {
-        BatasphLogger.warning(
-          '[STT] Microphone permission denied | session=$sessionId',
-        );
-        throw StateError('Microphone permission was denied');
-      }
-
       final dir = await getTemporaryDirectory();
       _recordingPath =
-          '${dir.path}/batasph_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          '${dir.path}/memori_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
       _recorder = AudioRecorder();
+
+      _d('WhisperSTT.startSession() starting recorder at $_recordingPath');
       await _recorder!.start(
         const RecordConfig(
           encoder: AudioEncoder.aacLc,
@@ -104,53 +133,60 @@ class WhisperSttService extends SttService {
         path: _recordingPath!,
       );
 
-      final silenceSeconds = MySharedPref.getVoiceSilenceSeconds();
+      _d('WhisperSTT.startSession() recording STARTED');
+      BatasphLogger.log('[STT] Recording started: $_recordingPath');
+
+      // Monitor amplitude for silence detection
+      final silenceSeconds = AppConfig.voiceSilenceSeconds;
+      final silenceDelay = resolveEndOfSpeechDelay(silenceSeconds);
       final silenceWindowSamples = resolveSilenceWindowSamples(silenceSeconds);
       _turnDetector = WhisperTurnDetector(
         speechThresholdDb: _silenceThresholdDb,
         silenceWindowSamples: silenceWindowSamples,
       );
-      BatasphLogger.log(
-        '[STT] Recording started | session=$sessionId'
-        ' | silence=${silenceSeconds}s -> window=$silenceWindowSamples samples'
-        ' | threshold=${_silenceThresholdDb}dB',
+      _d(
+        'WhisperSTT.startSession() silenceThreshold=${_silenceThresholdDb}dB '
+        'configuredSilence=${silenceSeconds}s '
+        'effectiveSilence=${silenceDelay.inMilliseconds}ms '
+        'samples=$silenceWindowSamples',
       );
 
       _amplitudeSubscription = _recorder!
           .onAmplitudeChanged(_amplitudeInterval)
-          .listen((amplitude) {
+          .listen((amp) {
             final hadDetectedSpeech = _turnDetector!.hasDetectedSpeech;
-            final action = _turnDetector!.observe(amplitude.current);
+            final action = _turnDetector!.observe(amp.current);
             final hasDetectedSpeech = _turnDetector!.hasDetectedSpeech;
 
             if (!hadDetectedSpeech && hasDetectedSpeech) {
-              BatasphLogger.log(
-                '[STT] Speech detected | session=$sessionId'
-                ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms'
-                ' | ${amplitude.current.toStringAsFixed(1)}dB',
-              );
               _cancelSpeechStartWatchdog();
-              onSpeechStarted?.call();
+              _d(
+                'WhisperSTT [AMP] first speech detected, startup watchdog cleared',
+              );
+            }
+
+            if (amp.current > _silenceThresholdDb && hasDetectedSpeech) {
+              _d(
+                'WhisperSTT [AMP] speech detected (${amp.current.toStringAsFixed(1)}dB)',
+              );
             }
 
             if (action == WhisperTurnAction.stopForEndOfSpeech && _isActive) {
-              BatasphLogger.log(
-                '[STT] End of speech | session=$sessionId'
-                ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms',
+              _d(
+                'WhisperSTT [AMP] END OF SPEECH reached '
+                '(${silenceDelay.inMilliseconds}ms), stopping',
               );
+              BatasphLogger.log('[STT] End of speech detected, stopping');
               _stopAndTranscribe();
             }
           });
-
       _armSpeechStartWatchdog(sessionId);
       _armMaxRecordingTimer(sessionId);
-    } catch (error, stackTrace) {
-      BatasphLogger.error(
-        '[STT] Failed to start session | session=$sessionId',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      onError?.call('Failed to start recording');
+      _d('WhisperSTT.startSession() amplitude monitoring started');
+    } catch (e) {
+      _d('WhisperSTT.startSession() FAILED: $e');
+      BatasphLogger.error('[STT] Failed to start session: $e');
+      onError?.call('Failed to start recording: $e');
       _isActive = false;
       await _cleanup();
     }
@@ -158,29 +194,30 @@ class WhisperSttService extends SttService {
 
   @override
   Future<void> stopSession() async {
-    if (!_isActive) {
-      return;
-    }
+    _d('WhisperSTT.stopSession() called | isActive=$_isActive');
+    if (!_isActive) return;
+    BatasphLogger.log('[STT] stopSession() called');
     await _stopAndTranscribe();
+    _d('WhisperSTT.stopSession() done');
   }
 
   @override
   Future<void> cancelSession() async {
-    if (_isActive) {
-      BatasphLogger.log(
-        '[STT] Session cancelled | session=$_sessionId'
-        ' | at=${_sessionStopwatch?.elapsedMilliseconds}ms',
-      );
-    }
+    _d('WhisperSTT.cancelSession() called | isActive=$_isActive');
+    BatasphLogger.log('[STT] cancelSession() called');
     _isActive = false;
     await _cleanup();
+    _d('WhisperSTT.cancelSession() done');
   }
 
   Future<void> _stopAndTranscribe() async {
+    _d(
+      'WhisperSTT._stopAndTranscribe() called | isActive=$_isActive sessionId=$_sessionId',
+    );
     if (!_isActive) {
+      _d('WhisperSTT._stopAndTranscribe() not active, returning');
       return;
     }
-
     _isActive = false;
     final capturedSessionId = _sessionId;
     _cancelSpeechStartWatchdog();
@@ -193,32 +230,31 @@ class WhisperSttService extends SttService {
 
     String? filePath;
     try {
+      _d('WhisperSTT._stopAndTranscribe() stopping recorder');
       filePath = await _recorder?.stop();
-    } catch (error, stackTrace) {
-      BatasphLogger.error(
-        '[STT] Failed to stop recorder | session=$capturedSessionId',
-        error: error,
-        stackTrace: stackTrace,
+      _d(
+        'WhisperSTT._stopAndTranscribe() recorder stopped, filePath=$filePath',
       );
+    } catch (e) {
+      _d('WhisperSTT._stopAndTranscribe() recorder stop FAILED: $e');
+      BatasphLogger.error('[STT] Failed to stop recorder: $e');
     }
 
     _recorder?.dispose();
     _recorder = null;
 
+    // Stale session — service was disposed/restarted while we were stopping.
     if (capturedSessionId != _sessionId) {
-      BatasphLogger.log(
-        '[STT] Recording discarded, session superseded'
-        ' | session=$capturedSessionId | current=$_sessionId',
+      _d(
+        'WhisperSTT._stopAndTranscribe() STALE session ($capturedSessionId != $_sessionId), dropping',
       );
-      if (filePath != null) {
-        _deleteFile(filePath);
-      }
+      if (filePath != null) _deleteFile(filePath);
       return;
     }
 
     if (filePath == null || filePath.isEmpty) {
-      BatasphLogger.warning(
-        '[STT] Recorder returned no file | session=$capturedSessionId',
+      _d(
+        'WhisperSTT._stopAndTranscribe() NO file path, calling onResult empty',
       );
       onResult?.call('', true);
       return;
@@ -227,22 +263,24 @@ class WhisperSttService extends SttService {
     final file = File(filePath);
     final exists = file.existsSync();
     final size = exists ? file.lengthSync() : 0;
+    _d('WhisperSTT._stopAndTranscribe() file exists=$exists size=$size bytes');
+
     if (!exists || size < 1000) {
-      BatasphLogger.log(
-        '[STT] Recording too small, treated as silence'
-        ' | session=$capturedSessionId | exists=$exists | bytes=$size',
+      _d(
+        'WhisperSTT._stopAndTranscribe() file too small ($size bytes), returning empty',
       );
+      BatasphLogger.log('[STT] Audio file too small or missing, skipping');
       onResult?.call('', true);
       _deleteFile(filePath);
       return;
     }
 
-    BatasphLogger.log(
-      '[STT] Uploading | session=$capturedSessionId | bytes=$size'
-      ' | recorded=${_sessionStopwatch?.elapsedMilliseconds}ms',
-    );
+    // Signal the controller to transition to "processing" before the HTTP call.
+    _d('WhisperSTT._stopAndTranscribe() firing onTranscribing callback');
     onTranscribing?.call();
-    final uploadStopwatch = Stopwatch()..start();
+
+    _d('WhisperSTT._stopAndTranscribe() sending $size bytes to /transcribe');
+    BatasphLogger.log('[STT] Sending ${file.lengthSync()} bytes to Whisper');
 
     try {
       final languages = MySharedPref.getSpeechLanguages();
@@ -254,6 +292,9 @@ class WhisperSttService extends SttService {
         'languages': jsonEncode(languages),
       });
 
+      _d(
+        'WhisperSTT._stopAndTranscribe() POST /transcribe languages=$languages',
+      );
       final response = await ApiClient().client.post(
         '/transcribe',
         data: formData,
@@ -263,35 +304,37 @@ class WhisperSttService extends SttService {
         ),
       );
 
+      // Stale check after the HTTP call returns.
       if (capturedSessionId != _sessionId) {
-        BatasphLogger.log(
-          '[STT] Transcript discarded, session superseded'
-          ' | session=$capturedSessionId | current=$_sessionId',
+        _d(
+          'WhisperSTT._stopAndTranscribe() STALE after HTTP ($capturedSessionId != $_sessionId), dropping',
         );
         return;
       }
 
       final text = response.data['text'] as String?;
-      BatasphLogger.log(
-        '[STT] Transcribed | session=$capturedSessionId'
-        ' | ${uploadStopwatch.elapsedMilliseconds}ms'
-        ' | chars=${text?.trim().length ?? 0}',
-      );
+      _d('WhisperSTT._stopAndTranscribe() response text="${text ?? '<null>'}');
+
       if (text != null && text.trim().isNotEmpty) {
+        _d(
+          'WhisperSTT._stopAndTranscribe() → onResult("${text.trim()}", true)',
+        );
+        BatasphLogger.log('[STT] Transcript: ${text.trim()}');
         onResult?.call(text.trim(), true);
       } else {
+        _d('WhisperSTT._stopAndTranscribe() → onResult("", true) (empty)');
+        BatasphLogger.log('[STT] Empty transcript returned');
         onResult?.call('', true);
       }
-    } catch (error, stackTrace) {
+    } catch (e) {
       if (capturedSessionId != _sessionId) {
+        _d(
+          'WhisperSTT._stopAndTranscribe() STALE after error ($capturedSessionId != $_sessionId), dropping',
+        );
         return;
       }
-      BatasphLogger.error(
-        '[STT] Transcription failed | session=$capturedSessionId'
-        ' | ${uploadStopwatch.elapsedMilliseconds}ms',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      _d('WhisperSTT._stopAndTranscribe() transcription FAILED: $e');
+      BatasphLogger.error('[STT] Transcription failed: $e');
       onError?.call('Transcription failed');
     } finally {
       _deleteFile(filePath);
@@ -299,6 +342,7 @@ class WhisperSttService extends SttService {
   }
 
   Future<void> _cleanup() async {
+    _d('WhisperSTT._cleanup() START');
     _cancelSpeechStartWatchdog();
     _cancelMaxRecordingTimer();
     await _amplitudeSubscription?.cancel();
@@ -308,7 +352,9 @@ class WhisperSttService extends SttService {
 
     try {
       await _recorder?.stop();
-    } catch (_) {}
+    } catch (e) {
+      _d('WhisperSTT recorder.stop threw during teardown (ignored): $e');
+    }
     _recorder?.dispose();
     _recorder = null;
 
@@ -316,25 +362,28 @@ class WhisperSttService extends SttService {
       _deleteFile(_recordingPath!);
       _recordingPath = null;
     }
+    _d('WhisperSTT._cleanup() DONE');
   }
 
   void _armSpeechStartWatchdog(int sessionId) {
     _cancelSpeechStartWatchdog();
     _speechStartWatchdog = Timer(_speechStartTimeout, () async {
-      if (!_isActive || sessionId != _sessionId) {
-        return;
-      }
-      if (_turnDetector?.hasDetectedSpeech ?? false) {
-        return;
-      }
-
-      BatasphLogger.log(
-        '[STT] No speech within ${_speechStartTimeout.inSeconds}s'
-        ' | session=$sessionId',
-      );
-      await cancelSession();
-      onResult?.call('', true);
+      await _handleSpeechStartTimeout(sessionId);
     });
+  }
+
+  Future<void> _handleSpeechStartTimeout(int sessionId) async {
+    if (!_isActive || sessionId != _sessionId) {
+      return;
+    }
+    if (_turnDetector?.hasDetectedSpeech ?? false) {
+      return;
+    }
+
+    _d('WhisperSTT speech-start watchdog fired: no speech detected');
+    BatasphLogger.log('[STT] Speech-start watchdog fired');
+    await cancelSession();
+    onResult?.call('', true);
   }
 
   void _cancelSpeechStartWatchdog() {
@@ -345,13 +394,11 @@ class WhisperSttService extends SttService {
   void _armMaxRecordingTimer(int sessionId) {
     _cancelMaxRecordingTimer();
     _maxRecordingTimer = Timer(_maxRecordingDuration, () {
-      if (!_isActive || sessionId != _sessionId) {
-        return;
-      }
-      BatasphLogger.log(
-        '[STT] Max recording ${_maxRecordingDuration.inSeconds}s reached'
-        ' | session=$sessionId',
+      if (!_isActive || sessionId != _sessionId) return;
+      _d(
+        'WhisperSTT max recording timer fired (${_maxRecordingDuration.inSeconds}s), force-stopping',
       );
+      BatasphLogger.log('[STT] Max recording duration reached, stopping');
       _stopAndTranscribe();
     });
   }
@@ -364,20 +411,20 @@ class WhisperSttService extends SttService {
   void _deleteFile(String path) {
     try {
       final file = File(path);
-      if (file.existsSync()) {
-        file.deleteSync();
-      }
-    } catch (_) {}
+      if (file.existsSync()) file.deleteSync();
+    } catch (e) {
+      _d('WhisperSTT could not delete temp file $path (ignored): $e');
+    }
   }
 
   @override
   Future<void> dispose() async {
+    _d('WhisperSTT.dispose() called');
     _isActive = false;
     await _cleanup();
     onResult = null;
     onError = null;
     onTranscribing = null;
-    onSpeechStarted = null;
-    onIdle = null;
+    _d('WhisperSTT.dispose() done');
   }
 }

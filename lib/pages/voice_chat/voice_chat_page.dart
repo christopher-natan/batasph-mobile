@@ -1,11 +1,18 @@
-import 'dart:math' as math;
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:batasph_mobile/components/call_screen_frame_component.dart';
+import 'package:batasph_mobile/components/circular_call_button_component.dart';
+import 'package:batasph_mobile/pages/voice_chat/components/voice_activity_component.dart';
 import 'package:get/get.dart';
+import 'package:batasph_mobile/components/persona_avatar_component.dart';
+import 'package:batasph_mobile/config/config.dart';
+import 'package:batasph_mobile/config/theme/app_themes.dart';
 import 'package:batasph_mobile/pages/voice_chat/voice_chat_controller.dart';
 
+/// The call screen, laid out like the phone's own in-call screen: who you are
+/// talking to and the timer on top, the avatar in the middle, then Mute and
+/// the red End button. A failed call shows its error with a retry. Ending the call (button,
+/// back gesture, or saying goodbye) turns the same screen into the call
+/// summary; Done goes back to Home.
 class VoiceChatPage extends StatefulWidget {
   const VoiceChatPage({super.key});
 
@@ -14,33 +21,21 @@ class VoiceChatPage extends StatefulWidget {
 }
 
 class _VoiceChatPageState extends State<VoiceChatPage>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late final VoiceChatController _controller;
   late final AnimationController _pulseController;
-  late final Animation<double> _pulseAnimation;
-  late final AnimationController _waveController;
-  Future<void>? _closingFuture;
-  bool _canPop = false;
+  Future<void>? _endingFuture;
 
   @override
   void initState() {
     super.initState();
     _controller = Get.find<VoiceChatController>();
-    _controller.onFarewellComplete = _close;
+    _controller.onFarewellComplete = _endCall;
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.startCall();
@@ -51,220 +46,161 @@ class _VoiceChatPageState extends State<VoiceChatPage>
   void dispose() {
     _controller.onFarewellComplete = null;
     _pulseController.dispose();
-    _waveController.dispose();
     super.dispose();
   }
 
-  Future<void> _close() => _closingFuture ??= _closeCall();
-
-  Future<void> _closeCall() async {
-    await _controller.endConversation();
-    if (mounted) {
-      setState(() => _canPop = true);
-      await WidgetsBinding.instance.endOfFrame;
-      if (mounted) Get.back();
-    }
+  /// One end per call even if End, back and the farewell race each other.
+  Future<void> _endCall() {
+    return _endingFuture ??= _controller.endConversation().whenComplete(() {
+      _endingFuture = null;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: PopScope(
-        canPop: _canPop,
-        onPopInvokedWithResult: (didPop, result) async {
-          if (didPop) {
-            return;
-          }
-          await _close();
+    return Obx(() {
+      final ended = _controller.callEnded.value;
+      return PopScope(
+        canPop: ended,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) _endCall();
         },
-        child: Stack(
-          children: [
-            const Positioned.fill(child: _VoiceOverlayBackground()),
-            SafeArea(
-              child: Column(
-                children: [
-                  _TopBar(controller: _controller, onClose: _close),
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(24.w, 8.h, 24.w, 12.h),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final transcriptHeight = math.min(
-                            138.h,
-                            constraints.maxHeight * 0.24,
-                          );
-                          final spacing = math.min(
-                            12.h,
-                            constraints.maxHeight * 0.025,
-                          );
-
-                          return Obx(
-                            () => Column(
-                              children: [
-                                Expanded(
-                                  child: Center(
-                                    child: _VoiceHero(
-                                      controller: _controller,
-                                      pulseAnimation: _pulseAnimation,
-                                      waveController: _waveController,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: spacing),
-                                SizedBox(
-                                  height: transcriptHeight,
-                                  child: _TranscriptRegion(
-                                    state: _controller.state.value,
-                                    userText: _controller.userText.value,
-                                    agentText: _controller.agentText.value,
-                                    errorMessage:
-                                        _controller.errorMessage.value,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(24.w, 10.h, 24.w, 24.h),
-                    child: _CallControls(onClose: _close),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VoiceOverlayBackground extends StatelessWidget {
-  const _VoiceOverlayBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF0D1118).withValues(alpha: 0.94),
-              const Color(0xFF111823).withValues(alpha: 0.9),
-              const Color(0xFF0D131C).withValues(alpha: 0.96),
-            ],
+        child: Scaffold(
+          body: CallScreenFrameComponent(
+            footer: ended
+                ? null
+                : _CallControls(controller: _controller, onEnd: _endCall),
+            child: ended
+                ? _EndedView(controller: _controller)
+                : _InCallView(controller: _controller, pulse: _pulseController),
           ),
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: -70,
-              right: -90,
-              child: _GlowCircle(
-                size: 280,
-                color: const Color(0xFFB97537).withValues(alpha: 0.15),
-              ),
-            ),
-            Positioned(
-              top: 220,
-              left: -90,
-              child: _GlowCircle(
-                size: 240,
-                color: const Color(0xFFE2BF85).withValues(alpha: 0.1),
-              ),
-            ),
-            Positioned(
-              bottom: 120,
-              right: -70,
-              child: _GlowCircle(
-                size: 210,
-                color: const Color(0xFF8B5A2A).withValues(alpha: 0.12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+      );
+    });
   }
 }
 
-class _TopBar extends StatelessWidget {
+// ─── In call ─────────────────────────────────────────────────
+
+class _InCallView extends StatelessWidget {
   final VoiceChatController controller;
-  final Future<void> Function() onClose;
+  final Animation<double> pulse;
 
-  const _TopBar({required this.controller, required this.onClose});
+  const _InCallView({required this.controller, required this.pulse});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20.w, 12.h, 20.w, 6.h),
-      child: Obx(
-        () => Row(
-          children: [
-            _CircleActionButton(icon: Icons.close_rounded, onTap: onClose),
-            SizedBox(width: 14.w),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    controller.selectedVoiceLabel,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 2.h),
-                  Text(
-                    'Call in progress • ${controller.callDurationLabel}',
-                    style: TextStyle(
-                      color: const Color(0xFFAEB9CB),
-                      fontSize: 12.sp,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _StatusChip(state: controller.state.value),
-          ],
+    return Obx(() {
+      final state = controller.state.value;
+      final connecting =
+          state == VoiceChatState.connecting || state == VoiceChatState.idle;
+
+      return Column(
+        children: [
+          _CallHeader(
+            status: connecting ? 'Ringing…' : controller.callDurationLabel,
+          ),
+          const Spacer(),
+          const SizedBox(height: 12),
+          _AnimatedAvatar(state: state, pulse: pulse),
+          const SizedBox(height: 10),
+          _StatusChip(
+            state: state,
+            muted: controller.isUserMuted.value,
+            pulse: pulse,
+          ),
+          const SizedBox(height: 10),
+          const Spacer(),
+          _ErrorArea(controller: controller),
+        ],
+      );
+    });
+  }
+}
+
+class _CallHeader extends StatelessWidget {
+  final String status;
+  final bool ended;
+
+  const _CallHeader({required this.status, this.ended = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Text(
+          AppConfig.personaName,
+          style: TextStyle(
+            fontSize: 30,
+            height: 1.2,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.8,
+            color: AppThemes.forest,
+          ),
         ),
-      ),
+        if (!ended) ...[
+          const SizedBox(height: 5),
+          const Text(
+            AppConfig.personaTagline,
+            style: TextStyle(fontSize: 13, color: AppThemes.forest),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Text(
+          status,
+          style: TextStyle(
+            fontSize: ended ? 14 : 17,
+            fontWeight: ended ? FontWeight.w400 : FontWeight.w500,
+            letterSpacing: ended ? 0 : 1.2,
+            color: ended ? AppThemes.muted : AppThemes.callForest,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _CircleActionButton extends StatelessWidget {
-  final IconData icon;
-  final Future<void> Function() onTap;
+/// A subtle halo follows the call state without changing the portrait's size.
+class _AnimatedAvatar extends StatelessWidget {
+  final VoiceChatState state;
+  final Animation<double> pulse;
 
-  const _CircleActionButton({required this.icon, required this.onTap});
+  const _AnimatedAvatar({required this.state, required this.pulse});
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16.r),
-        child: Container(
-          width: 44.w,
-          height: 44.w,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(16.r),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-          ),
-          child: Icon(icon, color: Colors.white, size: 20.sp),
-        ),
+    // Preparing an answer is still Luna's turn on the line (filler, thinking
+    // sound), so it pulses like speaking.
+    final active =
+        state == VoiceChatState.connecting ||
+        state == VoiceChatState.processing ||
+        state == VoiceChatState.speaking;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return SizedBox.square(
+      dimension: 204,
+      child: AnimatedBuilder(
+        animation: pulse,
+        builder: (context, child) {
+          final t = active && !reduceMotion ? pulse.value : 0.0;
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 192 + 12 * t,
+                height: 192 + 12 * t,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppThemes.callRing.withValues(alpha: 0.45 - 0.2 * t),
+                  ),
+                ),
+              ),
+              child!,
+            ],
+          );
+        },
+        child: const PersonaAvatarComponent(size: 190),
       ),
     );
   }
@@ -272,446 +208,119 @@ class _CircleActionButton extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   final VoiceChatState state;
+  final bool muted;
+  final Animation<double> pulse;
 
-  const _StatusChip({required this.state});
+  const _StatusChip({
+    required this.state,
+    required this.muted,
+    required this.pulse,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (state) {
-      VoiceChatState.idle => ('Ready', const Color(0xFFE2BF85)),
-      VoiceChatState.connecting => ('Calling', const Color(0xFFF0B46A)),
-      VoiceChatState.listening => ('Listening', const Color(0xFFF4B257)),
-      VoiceChatState.processing => ('Processing', const Color(0xFFD28A43)),
-      VoiceChatState.speaking => ('Speaking', const Color(0xFFF2C57E)),
-      VoiceChatState.error => ('Retry', Colors.redAccent),
-    };
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999.r),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
+    final (label, icon) = switch (state) {
+      VoiceChatState.idle ||
+      VoiceChatState.connecting => ('Ringing…', Icons.ring_volume_outlined),
+      VoiceChatState.listening when muted => (
+        "You're muted",
+        Icons.mic_off_rounded,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      VoiceChatState.listening => ('Listening to you…', Icons.mic_none_rounded),
+      VoiceChatState.processing ||
+      VoiceChatState.speaking => ('Luna is speaking', Icons.volume_up_outlined),
+      VoiceChatState.error => ('Call needs a retry', Icons.error_outline),
+    };
+    final speakingOrListening =
+        state == VoiceChatState.speaking ||
+        state == VoiceChatState.processing ||
+        (state == VoiceChatState.listening && !muted);
+    final color = state == VoiceChatState.error
+        ? AppThemes.callRed
+        : AppThemes.forest;
+
+    return Semantics(
+      liveRegion: true,
+      child: Column(
         children: [
-          Container(
-            width: 8.w,
-            height: 8.w,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-          ),
-          SizedBox(width: 7.w),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.sp,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          if (speakingOrListening)
+            VoiceActivityComponent(animation: pulse, animated: true)
+          else
+            SizedBox(height: 28, child: Icon(icon, color: color, size: 22)),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );
   }
 }
 
-class _VoiceHero extends StatelessWidget {
+/// The failed call's error with a retry, in the space above the controls.
+class _ErrorArea extends StatelessWidget {
   final VoiceChatController controller;
-  final Animation<double> pulseAnimation;
-  final AnimationController waveController;
 
-  const _VoiceHero({
-    required this.controller,
-    required this.pulseAnimation,
-    required this.waveController,
-  });
+  const _ErrorArea({required this.controller});
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final state = controller.state.value;
-      final (title, subtitle) = _copyForState(state);
+      final error = controller.errorMessage.value;
+      if (controller.state.value != VoiceChatState.error || error.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _ErrorCard(
+        message: error,
+        onRetry: controller.handlePrimaryControlTap,
+      );
+    });
+  }
+}
 
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final availableHeight = constraints.hasBoundedHeight
-              ? constraints.maxHeight
-              : 520.h;
-          final scale = (availableHeight / 520.h).clamp(0.62, 1.0);
-          final showSupportText = availableHeight > 340.h;
-          final orbFrameSize = (220.w * scale).clamp(148.w, 220.w);
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
 
-          return Container(
-            padding: EdgeInsets.fromLTRB(
-              22.w * scale,
-              20.h * scale,
-              22.w * scale,
-              22.h * scale,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(34.r),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF202B3F),
-                  Color(0xFF182233),
-                  Color(0xFF121A27),
-                ],
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF000000).withValues(alpha: 0.24),
-                  blurRadius: 26,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
+  const _ErrorCard({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 136,
+      child: Material(
+        color: AppThemes.callRed.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onRetry,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: EdgeInsets.all(16),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12.w * scale,
-                    vertical: 7.h * scale,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(999.r),
-                  ),
-                  child: Text(
-                    'VOICE MODE',
-                    style: TextStyle(
-                      color: const Color(0xFFE2BF85),
-                      fontSize: (11.sp * scale).clamp(10.sp, 11.sp),
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.7 * scale,
-                    ),
-                  ),
-                ),
-                SizedBox(height: (18.h * scale).clamp(10.h, 18.h)),
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: (28.sp * scale).clamp(22.sp, 28.sp),
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                  ),
-                ),
-                SizedBox(height: (10.h * scale).clamp(6.h, 10.h)),
-                Text(
-                  subtitle,
-                  maxLines: scale < 0.8 ? 2 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: const Color(0xFFC3CDDC),
-                    fontSize: (13.sp * scale).clamp(11.sp, 13.sp),
-                    height: 1.5,
-                  ),
-                ),
-                SizedBox(height: (22.h * scale).clamp(12.h, 22.h)),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap:
-                      state == VoiceChatState.idle ||
-                          state == VoiceChatState.error
-                      ? controller.handlePrimaryControlTap
-                      : null,
-                  child: SizedBox(
-                    width: orbFrameSize,
-                    height: orbFrameSize,
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      child: _VoiceOrb(
-                        controller: controller,
-                        pulseAnimation: pulseAnimation,
-                        waveController: waveController,
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: AppThemes.callRed,
                       ),
                     ),
                   ),
                 ),
-                SizedBox(height: (16.h * scale).clamp(10.h, 16.h)),
-                _StatePill(state: state, scale: scale),
-                if (showSupportText) ...[
-                  SizedBox(height: (10.h * scale).clamp(6.h, 10.h)),
-                  Text(
-                    state == VoiceChatState.error ||
-                            state == VoiceChatState.idle
-                        ? 'Tap the center to try the call again.'
-                        : state == VoiceChatState.connecting
-                        ? 'The call is connecting.'
-                        : 'Say goodbye when you are done, or end the call below.',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: const Color(0xFF9AA7BB),
-                      fontSize: (12.sp * scale).clamp(10.sp, 12.sp),
-                      height: 1.4,
-                    ),
+                SizedBox(height: 10),
+                Text(
+                  'Tap to try again',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppThemes.ink,
                   ),
-                ],
+                ),
               ],
             ),
-          );
-        },
-      );
-    });
-  }
-
-  (String, String) _copyForState(VoiceChatState state) {
-    return switch (state) {
-      VoiceChatState.idle => (
-        'Call is ready.',
-        'Tap the center to start a new conversation.',
-      ),
-      VoiceChatState.connecting => (
-        'Calling ${controller.selectedVoiceLabel}...',
-        'A short ring plays before the selected voice greets you.',
-      ),
-      VoiceChatState.listening => (
-        '${controller.selectedVoiceLabel} is listening.',
-        'Ask naturally. Your transcript stays visible below.',
-      ),
-      VoiceChatState.processing => (
-        'Checking the law.',
-        'The system is grounding your answer before speaking it back.',
-      ),
-      VoiceChatState.speaking => (
-        '${controller.selectedVoiceLabel} is speaking.',
-        'Your conversation continues when the reply finishes.',
-      ),
-      VoiceChatState.error => (
-        'Call needs a retry.',
-        'Tap the center to try again, or end the call.',
-      ),
-    };
-  }
-}
-
-class _StatePill extends StatelessWidget {
-  final VoiceChatState state;
-  final double scale;
-
-  const _StatePill({required this.state, this.scale = 1});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, icon, color) = switch (state) {
-      VoiceChatState.idle => (
-        'Ready',
-        Icons.mic_none_rounded,
-        const Color(0xFFE2BF85),
-      ),
-      VoiceChatState.connecting => (
-        'Calling',
-        Icons.call_rounded,
-        const Color(0xFFF0B46A),
-      ),
-      VoiceChatState.listening => (
-        'Listening',
-        Icons.hearing_rounded,
-        const Color(0xFFF4B257),
-      ),
-      VoiceChatState.processing => (
-        'Processing',
-        Icons.auto_awesome_rounded,
-        const Color(0xFFD28A43),
-      ),
-      VoiceChatState.speaking => (
-        'Speaking',
-        Icons.volume_up_rounded,
-        const Color(0xFFF2C57E),
-      ),
-      VoiceChatState.error => (
-        'Try Again',
-        Icons.error_outline_rounded,
-        Colors.redAccent,
-      ),
-    };
-
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: 14.w * scale,
-        vertical: 10.h * scale,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999.r),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: (16.sp * scale).clamp(14.sp, 16.sp)),
-          SizedBox(width: 8.w * scale),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: (12.sp * scale).clamp(10.sp, 12.sp),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TranscriptCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final String text;
-  final Color accentColor;
-
-  const _TranscriptCard({
-    required this.title,
-    required this.icon,
-    required this.text,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(22.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: accentColor, size: 16.sp),
-              SizedBox(width: 8.w),
-              Text(
-                title,
-                style: TextStyle(
-                  color: accentColor,
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8.h),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final maxLines = math.max(
-                  2,
-                  (constraints.maxHeight / (13.sp * 1.55)).floor(),
-                );
-
-                return Text(
-                  text,
-                  maxLines: maxLines,
-                  overflow: TextOverflow.fade,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.sp,
-                    height: 1.55,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TranscriptRegion extends StatelessWidget {
-  final VoiceChatState state;
-  final String userText;
-  final String agentText;
-  final String errorMessage;
-
-  const _TranscriptRegion({
-    required this.state,
-    required this.userText,
-    required this.agentText,
-    required this.errorMessage,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final showError = state == VoiceChatState.error && errorMessage.isNotEmpty;
-    final shouldShowTranscript =
-        !showError &&
-        userText.isNotEmpty &&
-        (state == VoiceChatState.listening ||
-            state == VoiceChatState.processing ||
-            agentText.isEmpty);
-
-    if (showError) {
-      return _ErrorCard(message: errorMessage);
-    }
-
-    if (shouldShowTranscript) {
-      return _TranscriptCard(
-        title: 'Live Transcript',
-        icon: Icons.hearing_rounded,
-        text: userText,
-        accentColor: const Color(0xFFE2BF85),
-      );
-    }
-
-    if (agentText.isNotEmpty) {
-      return _TranscriptCard(
-        title: 'BatasPH Reply',
-        icon: Icons.record_voice_over_outlined,
-        text: agentText,
-        accentColor: const Color(0xFFF4C781),
-      );
-    }
-
-    if (userText.isNotEmpty) {
-      return _TranscriptCard(
-        title: 'Live Transcript',
-        icon: Icons.hearing_rounded,
-        text: userText,
-        accentColor: const Color(0xFFE2BF85),
-      );
-    }
-
-    return const _TranscriptPlaceholder();
-  }
-}
-
-class _TranscriptPlaceholder extends StatelessWidget {
-  const _TranscriptPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(22.r),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Center(
-        child: Text(
-          'The selected voice will greet you first, then your transcript and reply will stay visible here.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: const Color(0xFFAAB6C9),
-            fontSize: 12.sp,
-            height: 1.45,
           ),
         ),
       ),
@@ -719,282 +328,214 @@ class _TranscriptPlaceholder extends StatelessWidget {
   }
 }
 
-class _ErrorCard extends StatelessWidget {
-  final String message;
+class _ToggleButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+  final bool active;
+  final VoidCallback onTap;
 
-  const _ErrorCard({required this.message});
+  const _ToggleButton({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    required this.active,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(14.w),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(22.r),
-        border: Border.all(color: Colors.red.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.redAccent),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                color: Colors.redAccent,
-                fontSize: 13.sp,
-                height: 1.5,
+    return Column(
+      children: [
+        Semantics(
+          button: true,
+          toggled: active,
+          label: label,
+          child: Material(
+            color: active
+                ? AppThemes.forest
+                : Colors.white.withValues(alpha: 0.65),
+            elevation: 2,
+            shadowColor: AppThemes.forest.withValues(alpha: 0.12),
+            shape: CircleBorder(
+              side: BorderSide(
+                color: active ? AppThemes.forest : AppThemes.line,
+              ),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              child: SizedBox(
+                width: 72,
+                height: 72,
+                child: Icon(
+                  active ? activeIcon : icon,
+                  size: 26,
+                  color: active ? Colors.white : AppThemes.ink,
+                ),
               ),
             ),
           ),
+        ),
+        SizedBox(height: 8),
+        Text(label, style: TextStyle(fontSize: 12, color: AppThemes.forest)),
+      ],
+    );
+  }
+}
+
+// ─── Call ended ──────────────────────────────────────────────
+
+class _EndedView extends StatelessWidget {
+  final VoiceChatController controller;
+
+  const _EndedView({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      return Column(
+        children: [
+          const SizedBox(height: 24),
+          _CallHeader(
+            status: 'Call ended · ${controller.endedCallDurationLabel}',
+            ended: true,
+          ),
+          const Spacer(),
+          const SizedBox(height: 32),
+          const PersonaAvatarComponent(size: 180, dimmed: true),
+          const SizedBox(height: 32),
+          const Text(
+            'Until next time.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 27,
+              height: 1.2,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.7,
+              color: AppThemes.forest,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'A little more clarity, one conversation at a time.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, height: 1.6, color: AppThemes.muted),
+          ),
+          const SizedBox(height: 28),
+          const Spacer(),
+          const Text(
+            'General legal information, not legal advice.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 10, height: 1.5, color: AppThemes.muted),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: _PillButton(
+                  label: 'Done',
+                  background: Colors.transparent,
+                  foreground: AppThemes.forest,
+                  onTap: controller.leaveCall,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _PillButton(
+                  label: 'Call again',
+                  icon: Icons.call_rounded,
+                  background: AppThemes.forest,
+                  foreground: Colors.white,
+                  onTap: controller.startCall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
         ],
+      );
+    });
+  }
+}
+
+class _PillButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color background;
+  final Color foreground;
+  final VoidCallback onTap;
+
+  const _PillButton({
+    required this.label,
+    this.icon,
+    required this.background,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: background,
+          foregroundColor: foreground,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: background == Colors.transparent
+                  ? AppThemes.line
+                  : background,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[Icon(icon, size: 18), SizedBox(width: 8)],
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _CallControls extends StatelessWidget {
-  final Future<void> Function() onClose;
-
-  const _CallControls({required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton.icon(
-        onPressed: onClose,
-        icon: const Icon(Icons.call_end_rounded),
-        label: const Text('End call'),
-        style: FilledButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: const Color(0xFFB7493B),
-          padding: EdgeInsets.symmetric(vertical: 16.h),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22.r),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GlowCircle extends StatelessWidget {
-  final double size;
-  final Color color;
-
-  const _GlowCircle({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-    );
-  }
-}
-
-class _VoiceOrb extends StatelessWidget {
   final VoiceChatController controller;
-  final Animation<double> pulseAnimation;
-  final AnimationController waveController;
+  final Future<void> Function() onEnd;
 
-  const _VoiceOrb({
-    required this.controller,
-    required this.pulseAnimation,
-    required this.waveController,
-  });
+  const _CallControls({required this.controller, required this.onEnd});
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final state = controller.state.value;
-      final avatarAsset = controller.selectedVoiceAvatarAsset;
-      final isListening = state == VoiceChatState.listening;
-      final isConnecting = state == VoiceChatState.connecting;
-      final isProcessing = state == VoiceChatState.processing;
-      final isSpeaking = state == VoiceChatState.speaking;
-      final isActive = isListening || isSpeaking || isConnecting;
-
-      final orbColor = switch (state) {
-        VoiceChatState.idle => const Color(0xFFC8843C),
-        VoiceChatState.connecting => const Color(0xFFD89445),
-        VoiceChatState.listening => const Color(0xFFD89445),
-        VoiceChatState.processing => const Color(0xFFB97537),
-        VoiceChatState.speaking => const Color(0xFFE2BF85),
-        VoiceChatState.error => Colors.redAccent,
-      };
-
-      return SizedBox(
-        width: 220.w,
-        height: 220.w,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([pulseAnimation, waveController]),
-          builder: (context, child) {
-            final scale = isActive ? pulseAnimation.value : 1.0;
-            return Transform.scale(
-              scale: scale,
-              child: CustomPaint(
-                painter: _WaveformRingPainter(
-                  color: orbColor,
-                  progress: waveController.value,
-                  isActive: isActive,
-                  isProcessing: isProcessing,
-                  barCount: 52,
-                ),
-                child: Center(
-                  child: Container(
-                    width: 122.w,
-                    height: 122.w,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [orbColor, orbColor.withValues(alpha: 0.82)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: orbColor.withValues(alpha: 0.34),
-                          blurRadius: 34,
-                          spreadRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: isProcessing
-                          ? Center(
-                              child: SizedBox(
-                                width: 34.w,
-                                height: 34.w,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.6,
-                                  color: Colors.white.withValues(alpha: 0.9),
-                                ),
-                              ),
-                            )
-                          : _buildOrbVisual(
-                              avatarAsset: avatarAsset,
-                              isSpeaking: isSpeaking,
-                              isConnecting: isConnecting,
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      );
-    });
-  }
-
-  Widget _buildOrbVisual({
-    required String? avatarAsset,
-    required bool isSpeaking,
-    required bool isConnecting,
-  }) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (avatarAsset != null)
-          Image.asset(
-            avatarAsset,
-            fit: BoxFit.cover,
-            cacheWidth: 360,
-            errorBuilder: (_, _, _) => _buildFallbackIcon(isSpeaking),
-          )
-        else
-          _buildFallbackIcon(isSpeaking),
-        if (isConnecting)
-          Container(color: const Color(0xFF121A27).withValues(alpha: 0.32)),
-        if (isConnecting)
-          Center(
-            child: Icon(Icons.call_rounded, color: Colors.white, size: 42.sp),
+    return Obx(
+      () => Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ToggleButton(
+            label: 'Mute',
+            icon: Icons.mic_none_rounded,
+            activeIcon: Icons.mic_off_rounded,
+            active: controller.isUserMuted.value,
+            onTap: controller.toggleMute,
           ),
-      ],
-    );
-  }
-
-  Widget _buildFallbackIcon(bool isSpeaking) {
-    return Center(
-      child: Icon(
-        isSpeaking ? Icons.volume_up_rounded : Icons.mic_rounded,
-        color: Colors.white,
-        size: 52.sp,
+          const SizedBox(width: 48),
+          CircularCallButtonComponent(
+            endCall: true,
+            label: 'End call',
+            onTap: onEnd,
+          ),
+        ],
       ),
     );
-  }
-}
-
-class _WaveformRingPainter extends CustomPainter {
-  final Color color;
-  final double progress;
-  final bool isActive;
-  final bool isProcessing;
-  final int barCount;
-
-  _WaveformRingPainter({
-    required this.color,
-    required this.progress,
-    required this.isActive,
-    required this.isProcessing,
-    required this.barCount,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final innerRadius = size.width * 0.32;
-    final maxBarHeight = size.width * 0.12;
-    final barWidth = size.width * 0.02;
-
-    final paint = Paint()
-      ..color = color.withValues(alpha: isActive ? 0.6 : 0.22)
-      ..strokeWidth = barWidth
-      ..strokeCap = StrokeCap.round;
-
-    for (var index = 0; index < barCount; index++) {
-      final angle = (2 * math.pi / barCount) * index - math.pi / 2;
-
-      double heightFraction;
-      if (isActive) {
-        final wave1 = math.sin((progress * 2 * math.pi) + (index * 0.4));
-        final wave2 = math.sin((progress * 2 * math.pi * 1.7) + (index * 0.25));
-        final wave3 = math.cos((progress * 2 * math.pi * 0.8) + (index * 0.6));
-        heightFraction = 0.3 + 0.7 * ((wave1 + wave2 + wave3 + 3) / 6);
-      } else if (isProcessing) {
-        final distance = ((index / barCount) - progress).abs();
-        final wrapped = distance > 0.5 ? 1.0 - distance : distance;
-        heightFraction = 0.2 + 0.48 * math.max(0, 1.0 - wrapped * 5);
-      } else {
-        heightFraction = 0.16;
-      }
-
-      final barHeight = maxBarHeight * heightFraction;
-      final startRadius = innerRadius + 2;
-      final endRadius = startRadius + barHeight;
-
-      final start = Offset(
-        center.dx + startRadius * math.cos(angle),
-        center.dy + startRadius * math.sin(angle),
-      );
-      final end = Offset(
-        center.dx + endRadius * math.cos(angle),
-        center.dy + endRadius * math.sin(angle),
-      );
-
-      canvas.drawLine(start, end, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _WaveformRingPainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.isActive != isActive ||
-        oldDelegate.isProcessing != isProcessing ||
-        oldDelegate.color != color;
   }
 }

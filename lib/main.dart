@@ -40,13 +40,11 @@ Future<void> main() async {
       splitScreenMode: true,
       ensureScreenSize: true,
       builder: (context, child) {
-        final isLight = MySharedPref.getThemeIsLight();
         return GetMaterialApp(
           title: 'BatasPH',
           debugShowCheckedModeBanner: false,
-          theme: MyTheme.getThemeData(isLight: true),
-          darkTheme: MyTheme.getThemeData(isLight: false),
-          themeMode: isLight ? ThemeMode.light : ThemeMode.dark,
+          theme: MyTheme.getThemeData(),
+          themeMode: ThemeMode.light,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(
               context,

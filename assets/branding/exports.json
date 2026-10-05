@@ -1,0 +1,488 @@
+[
+  {
+    "path": "assets/branding/batasph_logo_mark.png",
+    "size": 1024,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "assets/branding/batasph_logo_mark_1024.png",
+    "size": 1024,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "assets/images/logo.png",
+    "size": 512,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "assets/branding/batasph_app_icon_master.png",
+    "size": 1024,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "assets/branding/batasph_app_icon_1024.png",
+    "size": 1024,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "assets/branding/batasph_play_store_512.png",
+    "size": 512,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "docs/play-store/app-icon-512.png",
+    "size": 512,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
+    "size": 48,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-mdpi/ic_launcher_foreground.png",
+    "size": 108,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-mdpi/ic_launcher_monochrome.png",
+    "size": 108,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-mdpi/splash.png",
+    "size": 250,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-mdpi/android12splash.png",
+    "size": 288,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-night-mdpi/android12splash.png",
+    "size": 288,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/mipmap-hdpi/ic_launcher.png",
+    "size": 72,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-hdpi/ic_launcher_foreground.png",
+    "size": 162,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-hdpi/ic_launcher_monochrome.png",
+    "size": 162,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-hdpi/splash.png",
+    "size": 375,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-hdpi/android12splash.png",
+    "size": 432,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-night-hdpi/android12splash.png",
+    "size": 432,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+    "size": 96,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xhdpi/ic_launcher_foreground.png",
+    "size": 216,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xhdpi/ic_launcher_monochrome.png",
+    "size": 216,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xhdpi/splash.png",
+    "size": 500,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xhdpi/android12splash.png",
+    "size": 576,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-night-xhdpi/android12splash.png",
+    "size": 576,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+    "size": 144,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxhdpi/ic_launcher_foreground.png",
+    "size": 324,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxhdpi/ic_launcher_monochrome.png",
+    "size": 324,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxhdpi/splash.png",
+    "size": 750,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxhdpi/android12splash.png",
+    "size": 864,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-night-xxhdpi/android12splash.png",
+    "size": 864,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+    "size": 192,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_foreground.png",
+    "size": 432,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxxhdpi/ic_launcher_monochrome.png",
+    "size": 432,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxxhdpi/splash.png",
+    "size": 1000,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-xxxhdpi/android12splash.png",
+    "size": 1152,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-night-xxxhdpi/android12splash.png",
+    "size": 1152,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable/background.png",
+    "size": 1,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "android/app/src/main/res/drawable-v21/background.png",
+    "size": 1,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/LaunchBackground.imageset/background.png",
+    "size": 1,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png",
+    "size": 40,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png",
+    "size": 60,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png",
+    "size": 29,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png",
+    "size": 58,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png",
+    "size": 87,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png",
+    "size": 80,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png",
+    "size": 120,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-57x57@1x.png",
+    "size": 57,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-57x57@2x.png",
+    "size": 114,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png",
+    "size": 120,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png",
+    "size": 180,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png",
+    "size": 20,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png",
+    "size": 40,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png",
+    "size": 29,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png",
+    "size": 58,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png",
+    "size": 40,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png",
+    "size": 80,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-50x50@1x.png",
+    "size": 50,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-50x50@2x.png",
+    "size": 100,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-72x72@1x.png",
+    "size": 72,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-72x72@2x.png",
+    "size": 144,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png",
+    "size": 76,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png",
+    "size": 152,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png",
+    "size": 167,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
+    "size": 1024,
+    "opaque": true,
+    "noAlpha": true
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png",
+    "size": 250,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png",
+    "size": 500,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png",
+    "size": 750,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/icons/Icon-192.png",
+    "size": 192,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "web/icons/Icon-maskable-192.png",
+    "size": 192,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "web/icons/Icon-512.png",
+    "size": 512,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "web/icons/Icon-maskable-512.png",
+    "size": 512,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "web/favicon.png",
+    "size": 32,
+    "opaque": true,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/light-1x.png",
+    "size": 250,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/dark-1x.png",
+    "size": 250,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/light-2x.png",
+    "size": 500,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/dark-2x.png",
+    "size": 500,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/light-3x.png",
+    "size": 750,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/dark-3x.png",
+    "size": 750,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/light-4x.png",
+    "size": 1000,
+    "opaque": false,
+    "noAlpha": false
+  },
+  {
+    "path": "web/splash/img/dark-4x.png",
+    "size": 1000,
+    "opaque": false,
+    "noAlpha": false
+  }
+]

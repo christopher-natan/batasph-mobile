@@ -92,7 +92,7 @@ class ProfileController extends GetxController {
 
   Future<void> logout() async {
     await _authService.logout();
-    Get.offAllNamed(Routes.MAIN_SHELL);
+    Get.offAllNamed(Routes.HOME);
     Get.snackbar(
       'Signed out',
       'Your BatasPH account session has been cleared.',
@@ -106,7 +106,7 @@ class ProfileController extends GetxController {
       await _authService.deleteAccount();
       // No reset of isDeleting on success: this controller is disposed with
       // the route below.
-      Get.offAllNamed(Routes.MAIN_SHELL);
+      Get.offAllNamed(Routes.HOME);
       Get.snackbar(
         'Account deleted',
         'Your BatasPH account and its data have been permanently deleted.',
